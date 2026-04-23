@@ -21,7 +21,7 @@ export default function Register() {
       options: { data: { username } },
     });
     if (error) { setError(error.message); setLoading(false); }
-    else router.push("/feed");
+    else router.push("/onboarding");
   }
 
   return (
