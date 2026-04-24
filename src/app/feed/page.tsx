@@ -47,12 +47,18 @@ export default function Feed() {
   const [showVolume, setShowVolume] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     async function loadPosts() {
       try {
         const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setCurrentUserId(user.id);
         const { data } = await supabase
           .from("posts")
           .select("*, profiles(username, full_name, avatar_url)")
@@ -81,23 +87,40 @@ export default function Feed() {
   }, []);
 
   useEffect(() => {
-    setLiked(false);
-    setLikesCount(posts[current]?.likes || 0);
-
-    async function recordView() {
-      const post = posts[current];
-      if (!post || post.id.length < 10) return;
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        await supabase.from("views").upsert({
-          post_id: post.id,
-          user_id: user.id,
-        }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
-      } catch {}
+    const post = posts[current];
+    if (!post || post.id.length < 10) {
+      setLiked(false);
+      setBookmarked(false);
+      setLikesCount(post?.likes || 0);
+      return;
     }
-    recordView();
+
+    async function loadPostState() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLiked(false);
+        setBookmarked(false);
+        setLikesCount(post.likes);
+        return;
+      }
+
+      const [{ data: likeData }, { data: bookmarkData }] = await Promise.all([
+        supabase.from("likes").select("id").eq("user_id", user.id).eq("post_id", post.id).single(),
+        supabase.from("bookmarks").select("id").eq("user_id", user.id).eq("post_id", post.id).single(),
+      ]);
+
+      setLiked(!!likeData);
+      setBookmarked(!!bookmarkData);
+      setLikesCount(post.likes);
+
+      // Registra view
+      await supabase.from("views").upsert(
+        { post_id: post.id, user_id: user.id },
+        { onConflict: "post_id,user_id", ignoreDuplicates: true }
+      );
+    }
+    loadPostState();
   }, [current, posts]);
 
   useEffect(() => {
@@ -106,6 +129,38 @@ export default function Feed() {
       videoRef.current.volume = volume;
     }
   }, [muted, volume, current]);
+
+  async function toggleLike() {
+    const post = posts[current];
+    if (!post || post.id.length < 10) return;
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (liked) {
+      await supabase.from("likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+      setLiked(false);
+      setLikesCount(c => c - 1);
+    } else {
+      await supabase.from("likes").insert({ user_id: user.id, post_id: post.id });
+      setLiked(true);
+      setLikesCount(c => c + 1);
+    }
+  }
+
+  async function toggleBookmark() {
+    const post = posts[current];
+    if (!post || post.id.length < 10) return;
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (bookmarked) {
+      await supabase.from("bookmarks").delete().eq("user_id", user.id).eq("post_id", post.id);
+      setBookmarked(false);
+    } else {
+      await supabase.from("bookmarks").insert({ user_id: user.id, post_id: post.id });
+      setBookmarked(true);
+    }
+  }
 
   function handleUnmute() {
     const newMuted = !muted;
@@ -147,31 +202,24 @@ export default function Feed() {
         @media (min-width: 769px) { .zz-mobile { display: none !important; } }
       `}</style>
 
-      {/* Sfondo colorato */}
+      {/* Sfondo */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: post.mediaUrl ? 0.3 : 1 }} />
 
-      {/* Video/Foto in 9:16 centrato */}
+      {/* Video/Foto */}
       {post.mediaUrl && (
         <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
           {post.postType === "video" ? (
-            <video
-              ref={videoRef}
-              key={post.id}
-              src={post.mediaUrl}
+            <video ref={videoRef} key={post.id} src={post.mediaUrl}
               style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
-              autoPlay loop playsInline muted={muted}
-            />
+              autoPlay loop playsInline muted={muted} />
           ) : (
-            <img
-              src={post.mediaUrl}
-              alt="post"
-              style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
-            />
+            <img src={post.mediaUrl} alt="post"
+              style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
           )}
         </div>
       )}
 
-      {/* Overlay gradiente */}
+      {/* Overlay */}
       <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
 
       {/* Navbar sinistra desktop */}
@@ -222,11 +270,11 @@ export default function Feed() {
               {post.initials}
             </div>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, textShadow: "0 1px 4px rgba(0,0,0,.8)" }}>@{post.user}</span>
-            <span style={{ border: "1.5px solid rgba(255,255,255,.7)", borderRadius: 20, padding: "2px 10px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Segui</span>
+            {post.userId !== currentUserId && (
+              <span style={{ border: "1.5px solid rgba(255,255,255,.7)", borderRadius: 20, padding: "2px 10px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Segui</span>
+            )}
           </div>
-          <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.55, maxWidth: 400, textShadow: "0 1px 6px rgba(0,0,0,.8)" }}>
-            {post.caption}
-          </p>
+          <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.55, maxWidth: 400, textShadow: "0 1px 6px rgba(0,0,0,.8)" }}>{post.caption}</p>
           {post.hashtags && <p style={{ color: "rgba(255,255,255,.6)", fontSize: 13 }}>{post.hashtags}</p>}
           {post.hasLink && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,77,77,.5)", borderRadius: 12, padding: "8px 12px", maxWidth: 300, cursor: "pointer" }}>
@@ -247,30 +295,30 @@ export default function Feed() {
       </div>
 
       {/* Azioni destra */}
-      <div style={{ position: "absolute", right: 12, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <div style={{ position: "absolute", right: 12, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
 
         {/* Avatar */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid rgba(255,255,255,.8)", background: post.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>
             {post.initials}
           </div>
-          <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, marginTop: -9, cursor: "pointer" }}>+</div>
+          {post.userId !== currentUserId && (
+            <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, marginTop: -9, cursor: "pointer" }}>+</div>
+          )}
         </div>
 
         {/* Like */}
-        <button onClick={() => { setLiked(l => !l); setLikesCount(c => liked ? c - 1 : c + 1); }}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
+        <button onClick={toggleLike} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: liked ? "rgba(255,77,77,.25)" : "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill={liked ? "#FF4D4D" : "none"} stroke={liked ? "#FF4D4D" : "#fff"} strokeWidth="1.6">
               <path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" />
             </svg>
           </div>
-          <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(likesCount)}</span>
+          <span style={{ color: liked ? "#FF4D4D" : "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(likesCount)}</span>
         </button>
 
         {/* Commenti */}
-        <button onClick={() => setCommentPostId(post.id)}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
+        <button onClick={() => setCommentPostId(post.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6">
               <path d="M3 3h14v10H3z" /><path d="M7 17h6M10 13v4" />
@@ -279,25 +327,31 @@ export default function Feed() {
           <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(post.comments)}</span>
         </button>
 
+        {/* Preferiti */}
+        <button onClick={toggleBookmark} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: bookmarked ? "rgba(255,200,0,.2)" : "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill={bookmarked ? "#FFD700" : "none"} stroke={bookmarked ? "#FFD700" : "#fff"} strokeWidth="1.6">
+              <path d="M4 3h12v15l-6-4-6 4V3z" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <span style={{ color: bookmarked ? "#FFD700" : "rgba(255,255,255,.8)", fontSize: 11 }}>Salva</span>
+        </button>
+
         {/* Condividi */}
-        <button onClick={() => {
-          if (navigator.share) navigator.share({ title: post.user, text: post.caption, url: window.location.href });
-          else navigator.clipboard.writeText(window.location.href);
-        }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
+        <button onClick={() => setShowShare(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6">
               <path d="M17 7L10 4 3 7l7 3.5L17 7z" />
               <path d="M3 11l7 3.5L17 11M3 15l7 3.5L17 15" />
             </svg>
           </div>
-          <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(post.shares)}</span>
+          <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>Condividi</span>
         </button>
 
         {/* Audio */}
         {post.postType === "video" && post.mediaUrl && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <button onClick={handleUnmute}
-              style={{ width: 48, height: 48, borderRadius: "50%", background: muted ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.15)", border: muted ? "1.5px solid rgba(255,77,77,.5)" : "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <button onClick={handleUnmute} style={{ width: 48, height: 48, borderRadius: "50%", background: muted ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.15)", border: muted ? "1.5px solid rgba(255,77,77,.5)" : "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               {muted ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF4D4D" strokeWidth="2">
                   <path d="M11 5L6 9H2v6h4l5 4V5z" />
@@ -317,19 +371,16 @@ export default function Feed() {
             </span>
             {showVolume && !muted && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "rgba(0,0,0,.75)", borderRadius: 16, padding: "12px 10px", marginTop: 4 }}>
-                <input
-                  type="range" min="0" max="1" step="0.05"
-                  value={volume}
+                <input type="range" min="0" max="1" step="0.05" value={volume}
                   onChange={(e) => handleVolume(parseFloat(e.target.value))}
-                  style={{ width: 4, height: 80, cursor: "pointer", accentColor: "#FF4D4D", writingMode: "vertical-lr" as any, direction: "rtl" as any }}
-                />
+                  style={{ width: 4, height: 80, cursor: "pointer", accentColor: "#FF4D4D", writingMode: "vertical-lr" as any, direction: "rtl" as any }} />
                 <span style={{ color: "rgba(255,255,255,.5)", fontSize: 9 }}>{Math.round(volume * 100)}%</span>
               </div>
             )}
           </div>
         )}
 
-        {/* Guadagno affiliato */}
+        {/* Guadagno */}
         {post.hasLink && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
             <div style={{ background: "rgba(29,158,117,.3)", border: "1px solid rgba(29,158,117,.6)", color: "#4dffb8", fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "3px 8px" }}>
@@ -396,6 +447,84 @@ export default function Feed() {
           </a>
         ))}
       </div>
+
+      {/* Modal condivisione */}
+      {showShare && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.7)" }}
+          onClick={() => setShowShare(false)}>
+          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 20 }}>Condividi</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+
+              {/* Condividi sistema nativo */}
+              <button onClick={() => {
+                if (navigator.share) navigator.share({ title: post.user, text: post.caption, url: window.location.href });
+                else { navigator.clipboard.writeText(window.location.href); setShareMsg("Link copiato!"); }
+                setShowShare(false);
+              }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: "none", cursor: "pointer", width: "100%" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6">
+                    <circle cx="14" cy="3" r="2" /><circle cx="4" cy="10" r="2" /><circle cx="14" cy="17" r="2" />
+                    <path d="M6 9l6-4M6 11l6 4" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>Condividi</div>
+                  <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Invia ad altri tramite app</div>
+                </div>
+              </button>
+
+              {/* Copia link */}
+              <button onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                setShareMsg("Link copiato! ✓");
+                setTimeout(() => setShareMsg(""), 2000);
+              }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: "none", cursor: "pointer", width: "100%" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6">
+                    <rect x="8" y="8" width="10" height="10" rx="2" />
+                    <path d="M4 12H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" />
+                  </svg>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>Copia link</div>
+                  <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Copia il link del post</div>
+                </div>
+              </button>
+
+              {/* Aggiungi al profilo */}
+              <button onClick={async () => {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+                setShareMsg("Aggiunto al tuo profilo! ✓");
+                setTimeout(() => setShareMsg(""), 2000);
+                setShowShare(false);
+              }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,77,77,.08)", border: "1px solid rgba(255,77,77,.2)", cursor: "pointer", width: "100%" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,77,77,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#FF4D4D" strokeWidth="1.6">
+                    <circle cx="10" cy="7" r="3.5" />
+                    <path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" />
+                    <path d="M15 3v6M12 6h6" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ color: "#FF4D4D", fontWeight: 600, fontSize: 14 }}>Aggiungi al profilo</div>
+                  <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Mostra questo post sul tuo profilo</div>
+                </div>
+              </button>
+            </div>
+
+            {shareMsg && (
+              <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 12, background: "rgba(29,158,117,.15)", border: "1px solid rgba(29,158,117,.3)", color: "#4dffb8", fontSize: 13, fontWeight: 600, textAlign: "center" }}>
+                {shareMsg}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal commenti */}
       {commentPostId && (
