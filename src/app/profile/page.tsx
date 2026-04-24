@@ -13,28 +13,60 @@ type Profile = {
   link_bio_title: string;
 };
 
+type Post = {
+  id: string;
+  type: string;
+  media_url: string;
+  caption: string;
+  likes_count: number;
+  comments_count: number;
+  views_count: number;
+};
+
+function formatCount(n: number) {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
 export default function Profile() {
   const [activeTab, setActiveTab] = useState("video");
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [followersCount, setFollowersCount] = useState(0);
 
   useEffect(() => {
-    async function loadProfile() {
+    async function load() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "/login"; return; }
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-      if (data) setProfile(data);
+
+      const [{ data: profileData }, { data: postsData }, { count: followers }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", user.id).single(),
+        supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
+      ]);
+
+      if (profileData) setProfile(profileData);
+      if (postsData) setPosts(postsData);
+      setFollowersCount(followers || 0);
       setLoading(false);
     }
-    loadProfile();
+    load();
   }, []);
 
   const initials = profile?.full_name?.[0]?.toUpperCase() || profile?.username?.[0]?.toUpperCase() || "?";
+
+  const filteredPosts = posts.filter((p) => {
+    if (activeTab === "video") return p.type === "video";
+    if (activeTab === "foto") return p.type === "photo";
+    if (activeTab === "testo") return p.type === "text";
+    if (activeTab === "linkati") return false;
+    return true;
+  });
+
+  const totalLikes = posts.reduce((sum, p) => sum + (p.likes_count || 0), 0);
 
   if (loading) {
     return (
@@ -56,12 +88,10 @@ export default function Profile() {
       <style>{`
         body { margin: 0; background: #0a0a0a; }
         .zz-nav { display: none; }
-        .zz-mob-top { display: none; }
         .zz-mob-bot { display: flex; }
         .zz-content { margin-left: 0; }
         @media (min-width: 769px) {
           .zz-nav { display: flex; }
-          .zz-mob-top { display: none; }
           .zz-mob-bot { display: none; }
           .zz-content { margin-left: 220px; }
         }
@@ -132,7 +162,7 @@ export default function Profile() {
         ))}
       </div>
 
-      {/* Contenuto principale */}
+      {/* Contenuto */}
       <div className="zz-content" style={{ minHeight: "100vh", background: "#0a0a0a", paddingBottom: 100 }}>
 
         {/* Cover */}
@@ -168,7 +198,11 @@ export default function Profile() {
 
           {/* Stats */}
           <div style={{ display: "flex", gap: 28, marginTop: 16, paddingTop: 16, paddingBottom: 16, borderTop: "0.5px solid rgba(255,255,255,.08)", borderBottom: "0.5px solid rgba(255,255,255,.08)" }}>
-            {[["0", "Follower"], ["0", "Post"], ["0", "Like"]].map(([n, l]) => (
+            {[
+              [String(followersCount), "Follower"],
+              [String(posts.length), "Post"],
+              [formatCount(totalLikes), "Like"],
+            ].map(([n, l]) => (
               <div key={l}>
                 <div style={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>{n}</div>
                 <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, textTransform: "uppercase", letterSpacing: ".3px", marginTop: 2 }}>{l}</div>
@@ -196,7 +230,7 @@ export default function Profile() {
           {(profile?.link_bio_url || profile?.link_bio_title) && (
             <div style={{ marginTop: 16, borderRadius: 16, padding: "12px 16px", background: "rgba(255,77,77,.07)", border: "1px solid rgba(255,77,77,.2)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#FF4D4D", background: "rgba(255,77,77,.15)", borderRadius: 4, padding: "2px 7px", letterSpacing: ".3px" }}>LINK IN BIO</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "#FF4D4D", background: "rgba(255,77,77,.15)", borderRadius: 4, padding: "2px 7px" }}>LINK IN BIO</span>
                 <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(29,158,117,.8)", background: "rgba(29,158,117,.1)", borderRadius: 4, padding: "2px 7px", marginLeft: "auto" }}>apre nel browser</span>
               </div>
               {profile?.link_bio_title && <div style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{profile.link_bio_title}</div>}
@@ -212,14 +246,14 @@ export default function Profile() {
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "0.5px solid rgba(255,255,255,.07)", padding: "0 24px", marginTop: 8 }}>
           {["video", "foto", "testo", "linkati"].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex: 1, textAlign: "center", padding: "12px 0", fontWeight: 600, fontSize: 12, textTransform: "capitalize", color: activeTab === tab ? "#fff" : "rgba(255,255,255,.3)", borderBottom: activeTab === tab ? "2px solid #FF4D4D" : "2px solid transparent", background: "transparent", border: "none", borderBottomStyle: "solid", borderBottomWidth: 2, borderBottomColor: activeTab === tab ? "#FF4D4D" : "transparent", cursor: "pointer" }}>
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex: 1, textAlign: "center", padding: "12px 0", fontWeight: 600, fontSize: 12, textTransform: "capitalize", color: activeTab === tab ? "#fff" : "rgba(255,255,255,.3)", background: "transparent", border: "none", borderBottom: activeTab === tab ? "2px solid #FF4D4D" : "2px solid transparent", cursor: "pointer" }}>
               {tab}
             </button>
           ))}
         </div>
 
         {/* Grid post */}
-        <div style={{ padding: "0 0 20px" }}>
+        {filteredPosts.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12 }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,77,77,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#FF4D4D" strokeWidth="1.5">
@@ -231,8 +265,50 @@ export default function Profile() {
               <a href="/create" style={{ color: "#FF4D4D", textDecoration: "none", fontWeight: 600 }}>Pubblica il primo ⚡</a>
             </p>
           </div>
-        </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, marginTop: 2 }}>
+            {filteredPosts.map((p) => (
+              <div key={p.id} style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
+                {/* Thumbnail */}
+                {p.media_url && p.type === "video" && (
+                  <video src={p.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
+                )}
+                {p.media_url && p.type === "photo" && (
+                  <img src={p.media_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                )}
+                {!p.media_url && (
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a1a" }}>
+                    <span style={{ color: "rgba(255,255,255,.15)", fontSize: 11, padding: 8, textAlign: "center" }}>{p.caption?.slice(0, 30)}</span>
+                  </div>
+                )}
 
+                {/* Overlay con stats */}
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%)" }} />
+
+                {/* Icona video */}
+                {p.type === "video" && (
+                  <div style={{ position: "absolute", top: 6, right: 6 }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5">
+                      <rect x="1" y="3" width="10" height="10" rx="1.5" />
+                      <path d="M11 6l4-2v8l-4-2" />
+                    </svg>
+                  </div>
+                )}
+
+                {/* Views in basso */}
+                <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", alignItems: "center", gap: 3 }}>
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5">
+                    <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
+                    <circle cx="8" cy="8" r="2" />
+                  </svg>
+                  <span style={{ color: "rgba(255,255,255,.8)", fontSize: 10, fontWeight: 600 }}>
+                    {formatCount(p.views_count || 0)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

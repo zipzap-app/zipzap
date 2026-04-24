@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useFollow } from "@/hooks/usePost";
 import Comments from "@/components/Comments";
 import { createClient } from "@/lib/supabase/client";
 
@@ -84,6 +83,21 @@ export default function Feed() {
   useEffect(() => {
     setLiked(false);
     setLikesCount(posts[current]?.likes || 0);
+
+    async function recordView() {
+      const post = posts[current];
+      if (!post || post.id.length < 10) return;
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await supabase.from("views").upsert({
+          post_id: post.id,
+          user_id: user.id,
+        }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+      } catch {}
+    }
+    recordView();
   }, [current, posts]);
 
   useEffect(() => {
@@ -133,8 +147,8 @@ export default function Feed() {
         @media (min-width: 769px) { .zz-mobile { display: none !important; } }
       `}</style>
 
-      {/* Sfondo colorato sfumato */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: post.mediaUrl ? 0.3 : 1, transition: "opacity .5s" }} />
+      {/* Sfondo colorato */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: post.mediaUrl ? 0.3 : 1 }} />
 
       {/* Video/Foto in 9:16 centrato */}
       {post.mediaUrl && (
@@ -144,24 +158,14 @@ export default function Feed() {
               ref={videoRef}
               key={post.id}
               src={post.mediaUrl}
-              style={{
-                height: "100%",
-                width: "auto",
-                maxWidth: "100%",
-                objectFit: "contain",
-              }}
+              style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
               autoPlay loop playsInline muted={muted}
             />
           ) : (
             <img
               src={post.mediaUrl}
               alt="post"
-              style={{
-                height: "100%",
-                width: "auto",
-                maxWidth: "100%",
-                objectFit: "contain",
-              }}
+              style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
             />
           )}
         </div>
@@ -245,7 +249,7 @@ export default function Feed() {
       {/* Azioni destra */}
       <div style={{ position: "absolute", right: 12, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
 
-        {/* Avatar + segui */}
+        {/* Avatar */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid rgba(255,255,255,.8)", background: post.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>
             {post.initials}
@@ -311,22 +315,13 @@ export default function Feed() {
             <span style={{ color: muted ? "rgba(255,77,77,.8)" : "rgba(255,255,255,.6)", fontSize: 9, fontWeight: 700 }}>
               {muted ? "MUTO" : "AUDIO"}
             </span>
-
-            {/* Slider volume verticale */}
             {showVolume && !muted && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "rgba(0,0,0,.75)", borderRadius: 16, padding: "12px 10px", marginTop: 4 }}>
                 <input
                   type="range" min="0" max="1" step="0.05"
                   value={volume}
                   onChange={(e) => handleVolume(parseFloat(e.target.value))}
-                  style={{
-                    width: 4,
-                    height: 80,
-                    cursor: "pointer",
-                    accentColor: "#FF4D4D",
-                    writingMode: "vertical-lr" as any,
-                    direction: "rtl" as any,
-                  }}
+                  style={{ width: 4, height: 80, cursor: "pointer", accentColor: "#FF4D4D", writingMode: "vertical-lr" as any, direction: "rtl" as any }}
                 />
                 <span style={{ color: "rgba(255,255,255,.5)", fontSize: 9 }}>{Math.round(volume * 100)}%</span>
               </div>
