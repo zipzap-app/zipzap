@@ -34,6 +34,7 @@ export default function Create() {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [visibility, setVisibility] = useState<"public" | "friends" | "private">("public");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -64,10 +65,7 @@ export default function Create() {
   }
 
   function stopPreview() {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; }
     if (progressInterval.current) clearInterval(progressInterval.current);
     setPlayingId(null);
   }
@@ -81,9 +79,7 @@ export default function Create() {
     setPlayingId(track.id);
     setProgress((p) => ({ ...p, [track.id]: 0 }));
     progressInterval.current = setInterval(() => {
-      if (audio.duration) {
-        setProgress((p) => ({ ...p, [track.id]: (audio.currentTime / audio.duration) * 100 }));
-      }
+      if (audio.duration) setProgress((p) => ({ ...p, [track.id]: (audio.currentTime / audio.duration) * 100 }));
     }, 200);
     audio.onended = () => {
       setPlayingId(null);
@@ -100,10 +96,7 @@ export default function Create() {
   }
 
   async function handlePublish() {
-    if (!caption && !mediaFile) {
-      alert("Aggiungi almeno una descrizione o un file");
-      return;
-    }
+    if (!caption && !mediaFile) { alert("Aggiungi almeno una descrizione o un file"); return; }
     setPublishing(true);
     stopPreview();
 
@@ -118,17 +111,13 @@ export default function Create() {
       const fileExt = mediaFile.name.split(".").pop();
       const filePath = `${user.id}/${Date.now()}.${fileExt}`;
       const bucket = type === "video" ? "videos" : "images";
-
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, mediaFile, { upsert: true });
-
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, mediaFile, { upsert: true });
       if (!uploadError) {
         const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
         mediaUrl = data.publicUrl;
         setUploadProgress(70);
       } else {
-        alert("Errore upload file: " + uploadError.message);
+        alert("Errore upload: " + uploadError.message);
         setPublishing(false);
         return;
       }
@@ -144,14 +133,10 @@ export default function Create() {
       link_url: linkUrl || null,
       music_title: selectedTrack?.title || null,
       music_artist: selectedTrack?.artist || null,
+      visibility,
     });
 
-    if (error) {
-      alert("Errore pubblicazione: " + error.message);
-      setPublishing(false);
-      setUploadProgress(0);
-      return;
-    }
+    if (error) { alert("Errore: " + error.message); setPublishing(false); setUploadProgress(0); return; }
 
     setUploadProgress(100);
     setPublishing(false);
@@ -186,18 +171,13 @@ export default function Create() {
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 32, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" />
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
           </div>
-          <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -0.5 }}>
-            Zip<span style={{ color: "#FF4D4D" }}>Zap</span>
-          </span>
+          <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -0.5 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
         </div>
         <div style={{ width: 40 }} />
       </div>
 
-      {/* Progress bar upload */}
       {publishing && uploadProgress > 0 && (
         <div style={{ height: 3, background: "rgba(255,255,255,.1)", flexShrink: 0 }}>
           <div style={{ height: "100%", background: "#FF4D4D", width: `${uploadProgress}%`, transition: "width .3s" }} />
@@ -207,7 +187,7 @@ export default function Create() {
       <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 100px" }}>
 
         {/* Tipo */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, marginTop: 4 }}>
           {(["video", "photo", "text"] as const).map((t) => (
             <button key={t} onClick={() => setType(t)}
               style={{ flex: 1, padding: "10px 0", borderRadius: 12, fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer", background: type === t ? "#FF4D4D" : "rgba(255,255,255,.07)", color: type === t ? "#fff" : "rgba(255,255,255,.4)" }}>
@@ -256,17 +236,11 @@ export default function Create() {
 
         {/* Descrizione */}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>
-            Descrizione
-          </label>
-          <textarea value={caption}
-            onChange={(e) => setCaption(e.target.value.slice(0, 300))}
-            placeholder="Descrivi il tuo contenuto..."
-            rows={type === "text" ? 8 : 4}
+          <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Descrizione</label>
+          <textarea value={caption} onChange={(e) => setCaption(e.target.value.slice(0, 300))}
+            placeholder="Descrivi il tuo contenuto..." rows={type === "text" ? 8 : 4}
             style={{ width: "100%", borderRadius: 16, padding: "12px 16px", color: "#fff", fontSize: 13, outline: "none", resize: "none", background: "#1a1a1a", border: "1px solid rgba(255,255,255,.08)", boxSizing: "border-box" }} />
-          <div style={{ textAlign: "right", fontSize: 10, color: "rgba(255,255,255,.2)", marginTop: 4 }}>
-            {caption.length}/300
-          </div>
+          <div style={{ textAlign: "right", fontSize: 10, color: "rgba(255,255,255,.2)", marginTop: 4 }}>{caption.length}/300</div>
         </div>
 
         {/* Musica */}
@@ -281,9 +255,7 @@ export default function Create() {
                 </svg>
               </div>
               <div style={{ textAlign: "left" }}>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>
-                  {selectedTrack ? selectedTrack.title : "Aggiungi musica"}
-                </div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{selectedTrack ? selectedTrack.title : "Aggiungi musica"}</div>
                 {selectedTrack && <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>{selectedTrack.artist}</div>}
               </div>
             </div>
@@ -305,7 +277,7 @@ export default function Create() {
               <div style={{ display: "flex", borderBottom: "0.5px solid rgba(255,255,255,.08)" }}>
                 {(["library", "original"] as const).map((tab) => (
                   <button key={tab} onClick={() => setMusicTab(tab)}
-                    style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, color: musicTab === tab ? "#fff" : "rgba(255,255,255,.3)", borderBottom: musicTab === tab ? "2px solid #FF4D4D" : "2px solid transparent", background: "transparent", border: "none", borderBottomStyle: "solid", borderBottomWidth: 2, borderBottomColor: musicTab === tab ? "#FF4D4D" : "transparent", cursor: "pointer" }}>
+                    style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, color: musicTab === tab ? "#fff" : "rgba(255,255,255,.3)", background: "transparent", border: "none", borderBottom: musicTab === tab ? "2px solid #FF4D4D" : "2px solid transparent", cursor: "pointer" }}>
                     {tab === "library" ? "Libreria" : "Il mio audio"}
                   </button>
                 ))}
@@ -379,6 +351,32 @@ export default function Create() {
           )}
         </div>
 
+        {/* Visibilità */}
+        <div style={{ marginBottom: 16, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,.08)" }}>
+          <div style={{ padding: "10px 16px", background: "rgba(255,255,255,.04)" }}>
+            <span style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }}>Visibilità</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {[
+              { val: "public", label: "Tutti", desc: "Visibile a chiunque nel feed", icon: "🌍" },
+              { val: "friends", label: "Amici", desc: "Solo chi segui e ti segue", icon: "👥" },
+              { val: "private", label: "Solo io", desc: "Visibile solo a te", icon: "🔒" },
+            ].map((v, i) => (
+              <button key={v.val} onClick={() => setVisibility(v.val as any)}
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", background: visibility === v.val ? "rgba(255,77,77,.08)" : "transparent", border: "none", borderBottom: i < 2 ? "0.5px solid rgba(255,255,255,.06)" : "none", cursor: "pointer", textAlign: "left" }}>
+                <span style={{ fontSize: 20 }}>{v.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: visibility === v.val ? "#FF4D4D" : "#fff", fontWeight: 600, fontSize: 13 }}>{v.label}</div>
+                  <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>{v.desc}</div>
+                </div>
+                <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${visibility === v.val ? "#FF4D4D" : "rgba(255,255,255,.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {visibility === v.val && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FF4D4D" }} />}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Link affiliato */}
         <div style={{ marginBottom: 24, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,77,77,.2)" }}>
           <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,77,77,.07)" }}>
@@ -386,8 +384,7 @@ export default function Create() {
             <span style={{ color: "rgba(255,255,255,.3)", fontSize: 11 }}>opzionale</span>
           </div>
           <div style={{ padding: "12px 16px" }}>
-            <input type="url" value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
+            <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
               placeholder="https://amazon.it/prodotto..."
               style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#FF4D4D", fontSize: 13 }} />
           </div>
@@ -397,7 +394,6 @@ export default function Create() {
           style={{ width: "100%", padding: "16px 0", borderRadius: 16, fontWeight: 900, fontSize: 15, color: "#fff", border: "none", cursor: publishing ? "not-allowed" : "pointer", background: publishing ? "#993333" : "#FF4D4D" }}>
           {publishing ? `Pubblicazione... ${uploadProgress}%` : "Pubblica ⚡"}
         </button>
-
       </div>
     </div>
   );

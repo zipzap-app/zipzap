@@ -38,8 +38,11 @@ function formatCount(n: number) {
 }
 
 export default function Feed() {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [feedTab, setFeedTab] = useState<"perTe" | "seguiti">("perTe");
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
+  const [followedPosts, setFollowedPosts] = useState<Post[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const [loadingFollowed, setLoadingFollowed] = useState(false);
   const [current, setCurrent] = useState(0);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [muted, setMuted] = useState(true);
@@ -53,19 +56,24 @@ export default function Feed() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const posts = feedTab === "perTe" ? allPosts : followedPosts;
+
   useEffect(() => {
     async function loadPosts() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) setCurrentUserId(user.id);
+
         const { data } = await supabase
           .from("posts")
           .select("*, profiles(username, full_name, avatar_url)")
+          .eq("visibility", "public")
           .order("created_at", { ascending: false })
           .limit(20);
+
         if (data && data.length > 0) {
-          setPosts(data.map((p, i) => ({
+          setAllPosts(data.map((p, i) => ({
             id: p.id, userId: p.user_id,
             user: p.profiles?.username || "utente",
             initials: (p.profiles?.full_name || p.profiles?.username || "U")[0].toUpperCase(),
@@ -78,43 +86,85 @@ export default function Feed() {
             mediaUrl: p.media_url || "", postType: p.type || "text",
           })));
         } else {
-          setPosts(mockPosts);
+          setAllPosts(mockPosts);
         }
-      } catch { setPosts(mockPosts); }
+      } catch { setAllPosts(mockPosts); }
       setLoadingPosts(false);
     }
     loadPosts();
   }, []);
 
   useEffect(() => {
+    if (feedTab !== "seguiti" || followedPosts.length > 0) return;
+    async function loadFollowedPosts() {
+      setLoadingFollowed(true);
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setLoadingFollowed(false); return; }
+
+        // Prendi gli ID delle persone che segui
+        const { data: follows } = await supabase
+          .from("follows")
+          .select("following_id")
+          .eq("follower_id", user.id);
+
+        if (!follows || follows.length === 0) {
+          setFollowedPosts([]);
+          setLoadingFollowed(false);
+          return;
+        }
+
+        const followingIds = follows.map(f => f.following_id);
+
+        const { data } = await supabase
+          .from("posts")
+          .select("*, profiles(username, full_name, avatar_url)")
+          .in("user_id", followingIds)
+          .in("visibility", ["public", "friends"])
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (data && data.length > 0) {
+          setFollowedPosts(data.map((p, i) => ({
+            id: p.id, userId: p.user_id,
+            user: p.profiles?.username || "utente",
+            initials: (p.profiles?.full_name || p.profiles?.username || "U")[0].toUpperCase(),
+            color: colors[i % colors.length],
+            caption: p.caption || "", hashtags: "",
+            likes: p.likes_count || 0, comments: p.comments_count || 0, shares: 0,
+            hasLink: !!p.link_url, linkName: p.link_url || "",
+            linkMeta: p.link_url ? "apre nel browser" : "", earn: "+€6",
+            type: p.link_url ? "LINK" : "LIBERO",
+            mediaUrl: p.media_url || "", postType: p.type || "text",
+          })));
+        } else {
+          setFollowedPosts([]);
+        }
+      } catch {}
+      setLoadingFollowed(false);
+    }
+    loadFollowedPosts();
+  }, [feedTab]);
+
+  useEffect(() => {
+    setCurrent(0);
+  }, [feedTab]);
+
+  useEffect(() => {
     const post = posts[current];
     if (!post || post.id.length < 10) {
-      setLiked(false);
-      setBookmarked(false);
-      setLikesCount(post?.likes || 0);
-      return;
+      setLiked(false); setBookmarked(false); setLikesCount(post?.likes || 0); return;
     }
-
     async function loadPostState() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLiked(false);
-        setBookmarked(false);
-        setLikesCount(post.likes);
-        return;
-      }
-
+      if (!user) { setLiked(false); setBookmarked(false); setLikesCount(post.likes); return; }
       const [{ data: likeData }, { data: bookmarkData }] = await Promise.all([
         supabase.from("likes").select("id").eq("user_id", user.id).eq("post_id", post.id).single(),
         supabase.from("bookmarks").select("id").eq("user_id", user.id).eq("post_id", post.id).single(),
       ]);
-
-      setLiked(!!likeData);
-      setBookmarked(!!bookmarkData);
-      setLikesCount(post.likes);
-
-      // Registra view
+      setLiked(!!likeData); setBookmarked(!!bookmarkData); setLikesCount(post.likes);
       await supabase.from("views").upsert(
         { post_id: post.id, user_id: user.id },
         { onConflict: "post_id,user_id", ignoreDuplicates: true }
@@ -124,10 +174,7 @@ export default function Feed() {
   }, [current, posts]);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = muted;
-      videoRef.current.volume = volume;
-    }
+    if (videoRef.current) { videoRef.current.muted = muted; videoRef.current.volume = volume; }
   }, [muted, volume, current]);
 
   async function toggleLike() {
@@ -138,12 +185,10 @@ export default function Feed() {
     if (!user) return;
     if (liked) {
       await supabase.from("likes").delete().eq("user_id", user.id).eq("post_id", post.id);
-      setLiked(false);
-      setLikesCount(c => c - 1);
+      setLiked(false); setLikesCount(c => c - 1);
     } else {
       await supabase.from("likes").insert({ user_id: user.id, post_id: post.id });
-      setLiked(true);
-      setLikesCount(c => c + 1);
+      setLiked(true); setLikesCount(c => c + 1);
     }
   }
 
@@ -163,18 +208,15 @@ export default function Feed() {
   }
 
   function handleUnmute() {
-    const newMuted = !muted;
-    setMuted(newMuted);
+    const newMuted = !muted; setMuted(newMuted);
     if (videoRef.current) videoRef.current.muted = newMuted;
-    if (!newMuted) setShowVolume(true);
-    else setShowVolume(false);
+    if (!newMuted) setShowVolume(true); else setShowVolume(false);
   }
 
   function handleVolume(v: number) {
     setVolume(v);
     if (videoRef.current) videoRef.current.volume = v;
-    if (v === 0) setMuted(true);
-    else setMuted(false);
+    if (v === 0) setMuted(true); else setMuted(false);
   }
 
   if (loadingPosts) return (
@@ -189,6 +231,62 @@ export default function Feed() {
   );
 
   const post = posts[current];
+
+  // Schermata vuota per Seguiti
+  if (feedTab === "seguiti" && !loadingFollowed && followedPosts.length === 0) {
+    return (
+      <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
+        <style>{`
+          @media (max-width: 768px) { .zz-desktop { display: none !important; } }
+          @media (min-width: 769px) { .zz-mobile { display: none !important; } }
+        `}</style>
+
+        {/* Navbar sinistra desktop */}
+        <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.5)", borderRight: "0.5px solid rgba(255,255,255,.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
+            </div>
+            <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
+          </div>
+          {[
+            { label: "Home", href: "/feed", active: true },
+            { label: "Esplora", href: "/explore" },
+            { label: "Zap Store", href: "/store", isStore: true },
+            { label: "Profilo", href: "/profile" },
+          ].map((item) => (
+            <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: item.active ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>
+              {item.label}
+            </a>
+          ))}
+        </div>
+
+        {/* Tab selector */}
+        <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 20, display: "flex", gap: 24 }}>
+          <span onClick={() => setFeedTab("perTe")} style={{ color: "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, cursor: "pointer", paddingBottom: 4 }}>Per te</span>
+          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14, borderBottom: "2px solid #fff", paddingBottom: 4, cursor: "pointer" }}>Seguiti</span>
+        </div>
+
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(255,77,77,.1)", border: "1px solid rgba(255,77,77,.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="28" height="28" viewBox="0 0 20 20" fill="none" stroke="#FF4D4D" strokeWidth="1.5">
+              <circle cx="10" cy="7" r="3.5" />
+              <path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" />
+            </svg>
+          </div>
+          <p style={{ color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center" }}>Nessun post dai seguiti</p>
+          <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13, textAlign: "center", lineHeight: 1.6 }}>
+            Segui altri creator per vedere i loro contenuti qui.
+          </p>
+          <button onClick={() => window.location.href = "/explore"}
+            style={{ padding: "12px 24px", borderRadius: 14, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+            Scopri creator ⚡
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!post) return (
     <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
       <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Nessun post disponibile</p>
@@ -251,16 +349,23 @@ export default function Feed() {
           <span style={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
         </div>
         <div style={{ display: "flex", gap: 14 }}>
-          <span style={{ color: "#fff", fontSize: 13, borderBottom: "1.5px solid #fff", paddingBottom: 2 }}>Per te</span>
-          <span style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Seguiti</span>
+          <span onClick={() => setFeedTab("perTe")} style={{ color: feedTab === "perTe" ? "#fff" : "rgba(255,255,255,.4)", fontSize: 13, borderBottom: feedTab === "perTe" ? "1.5px solid #fff" : "none", paddingBottom: 2, cursor: "pointer" }}>Per te</span>
+          <span onClick={() => setFeedTab("seguiti")} style={{ color: feedTab === "seguiti" ? "#fff" : "rgba(255,255,255,.4)", fontSize: 13, borderBottom: feedTab === "seguiti" ? "1.5px solid #fff" : "none", paddingBottom: 2, cursor: "pointer" }}>Seguiti</span>
         </div>
       </div>
 
       {/* Tab desktop */}
       <div className="zz-desktop" style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 20, display: "flex", gap: 24 }}>
-        <span style={{ color: "#fff", fontWeight: 600, fontSize: 14, borderBottom: "2px solid #fff", paddingBottom: 4, cursor: "pointer" }}>Per te</span>
-        <span style={{ color: "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Seguiti</span>
+        <span onClick={() => setFeedTab("perTe")} style={{ color: feedTab === "perTe" ? "#fff" : "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, borderBottom: feedTab === "perTe" ? "2px solid #fff" : "2px solid transparent", paddingBottom: 4, cursor: "pointer" }}>Per te</span>
+        <span onClick={() => setFeedTab("seguiti")} style={{ color: feedTab === "seguiti" ? "#fff" : "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, borderBottom: feedTab === "seguiti" ? "2px solid #fff" : "2px solid transparent", paddingBottom: 4, cursor: "pointer" }}>Seguiti</span>
       </div>
+
+      {/* Loading seguiti */}
+      {loadingFollowed && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.6)" }}>
+          <p style={{ color: "rgba(255,255,255,.5)", fontSize: 13 }}>Caricamento seguiti...</p>
+        </div>
+      )}
 
       {/* Contenuto post in basso */}
       <div style={{ position: "absolute", bottom: 100, left: 16, right: 80, zIndex: 20 }}>
@@ -392,20 +497,20 @@ export default function Feed() {
       </div>
 
       {/* Frecce navigazione — sinistra */}
-<div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-  <button onClick={() => setCurrent(c => Math.max(0, c - 1))}
-    style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
-      <path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  </button>
-  <button onClick={() => setCurrent(c => Math.min(posts.length - 1, c + 1))}
-    style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
-      <path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  </button>
-</div>
+      <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+        <button onClick={() => setCurrent(c => Math.max(0, c - 1))}
+          style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
+            <path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <button onClick={() => setCurrent(c => Math.min(posts.length - 1, c + 1))}
+          style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
+            <path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
 
       {/* Navbar mobile bottom */}
       <div className="zz-mobile" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, display: "flex", alignItems: "center", justifyContent: "space-around", padding: "10px 16px 28px", background: "rgba(0,0,0,.88)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
@@ -419,15 +524,11 @@ export default function Feed() {
           <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
             {item.isCreate ? (
               <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2">
-                  <path d="M9 3v12M3 9h12" strokeLinecap="round" />
-                </svg>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
               </div>
             ) : item.isStore ? (
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,77,77,.12)", border: "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" />
-                </svg>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" /></svg>
                 <span style={{ color: "#FF4D4D", fontSize: 11, fontWeight: 700 }}>Store</span>
               </div>
             ) : (
@@ -439,9 +540,7 @@ export default function Feed() {
                   {item.href === "/explore" && <><circle cx="10" cy="10" r="6" /><path d="M14 14l2.5 2.5" strokeLinecap="round" /></>}
                   {item.href === "/profile" && <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></>}
                 </svg>
-                <span style={{ fontSize: 9, fontWeight: 500, color: item.active ? "#fff" : "rgba(255,255,255,.35)" }}>
-                  {item.label}
-                </span>
+                <span style={{ fontSize: 9, fontWeight: 500, color: item.active ? "#fff" : "rgba(255,255,255,.35)" }}>{item.label}</span>
               </>
             )}
           </a>
@@ -455,10 +554,7 @@ export default function Feed() {
           <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 20 }}>Condividi</div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-
-              {/* Condividi sistema nativo */}
               <button onClick={() => {
                 if (navigator.share) navigator.share({ title: post.user, text: post.caption, url: window.location.href });
                 else { navigator.clipboard.writeText(window.location.href); setShareMsg("Link copiato!"); }
@@ -475,8 +571,6 @@ export default function Feed() {
                   <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Invia ad altri tramite app</div>
                 </div>
               </button>
-
-              {/* Copia link */}
               <button onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
                 setShareMsg("Link copiato! ✓");
@@ -493,30 +587,7 @@ export default function Feed() {
                   <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Copia il link del post</div>
                 </div>
               </button>
-
-              {/* Aggiungi al profilo */}
-              <button onClick={async () => {
-                const supabase = createClient();
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return;
-                setShareMsg("Aggiunto al tuo profilo! ✓");
-                setTimeout(() => setShareMsg(""), 2000);
-                setShowShare(false);
-              }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,77,77,.08)", border: "1px solid rgba(255,77,77,.2)", cursor: "pointer", width: "100%" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,77,77,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#FF4D4D" strokeWidth="1.6">
-                    <circle cx="10" cy="7" r="3.5" />
-                    <path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" />
-                    <path d="M15 3v6M12 6h6" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ color: "#FF4D4D", fontWeight: 600, fontSize: 14 }}>Aggiungi al profilo</div>
-                  <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Mostra questo post sul tuo profilo</div>
-                </div>
-              </button>
             </div>
-
             {shareMsg && (
               <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 12, background: "rgba(29,158,117,.15)", border: "1px solid rgba(29,158,117,.3)", color: "#4dffb8", fontSize: 13, fontWeight: 600, textAlign: "center" }}>
                 {shareMsg}
