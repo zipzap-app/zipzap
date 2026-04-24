@@ -26,6 +26,8 @@ export default function EditProfile() {
   const [category, setCategory] = useState("");
   const [linkBioUrl, setLinkBioUrl] = useState("");
   const [linkBioTitle, setLinkBioTitle] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -49,11 +51,38 @@ export default function EditProfile() {
         setCategory(data.category || "");
         setLinkBioUrl(data.link_bio_url || "");
         setLinkBioTitle(data.link_bio_title || "");
+        setAvatarUrl(data.avatar_url || "");
       }
       setLoading(false);
     }
     loadProfile();
   }, [router]);
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const fileExt = file.name.split(".").pop();
+    const filePath = `${user.id}/avatar.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true });
+    if (!uploadError) {
+      const { data } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+      const publicUrl = data.publicUrl + `?t=${Date.now()}`;
+      setAvatarUrl(publicUrl);
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("id", user.id);
+    }
+    setUploadingAvatar(false);
+  }
 
   async function handleSave() {
     if (!fullName || !username) {
@@ -65,7 +94,6 @@ export default function EditProfile() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
-
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -78,14 +106,11 @@ export default function EditProfile() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
-
     if (error) {
       setError(error.message);
     } else {
       setSuccess(true);
-      setTimeout(() => {
-        router.push("/profile");
-      }, 1200);
+      setTimeout(() => { router.push("/profile"); }, 1200);
     }
     setSaving(false);
   }
@@ -139,22 +164,38 @@ export default function EditProfile() {
         {/* Avatar */}
         <div className="flex justify-center mb-8">
           <div className="relative">
-            <div className="rounded-full flex items-center justify-center font-black text-3xl"
+            <div className="rounded-full flex items-center justify-center font-black text-3xl overflow-hidden"
               style={{
                 width: 90, height: 90,
                 background: "#1a0020",
-                color: "#FF4D4D",
                 border: "3px solid rgba(255,77,77,.3)",
               }}>
-              {fullName ? fullName[0].toUpperCase() : "?"}
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="avatar"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ color: "#FF4D4D" }}>
+                  {fullName ? fullName[0].toUpperCase() : "?"}
+                </span>
+              )}
             </div>
-            <div className="absolute bottom-0 right-0 rounded-full flex items-center justify-center cursor-pointer"
+            <label htmlFor="avatar-upload"
+              className="absolute bottom-0 right-0 rounded-full flex items-center justify-center cursor-pointer"
               style={{ width: 28, height: 28, background: "#FF4D4D" }}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
                 stroke="#fff" strokeWidth="1.5">
                 <path d="M6 2v8M2 6h8" strokeLinecap="round" />
               </svg>
-            </div>
+            </label>
+            <input id="avatar-upload" type="file" accept="image/*"
+              className="hidden"
+              onChange={handleAvatarUpload} />
+            {uploadingAvatar && (
+              <div className="absolute inset-0 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,.6)" }}>
+                <span className="text-white text-xs font-bold">...</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -171,14 +212,13 @@ export default function EditProfile() {
                 Info base
               </span>
             </div>
-            <div className="flex flex-col divide-y" style={{ borderColor: "rgba(255,255,255,.06)" }}>
+            <div className="flex flex-col">
               <div className="flex items-center px-4 py-3 gap-3">
                 <span className="text-sm w-24 flex-shrink-0" style={{ color: "rgba(255,255,255,.4)" }}>Nome</span>
                 <input type="text" value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Nome completo"
-                  className="flex-1 bg-transparent text-white text-sm outline-none"
-                  style={{ color: "#fff" }} />
+                  className="flex-1 bg-transparent text-white text-sm outline-none" />
               </div>
               <div className="flex items-center px-4 py-3 gap-3"
                 style={{ borderTop: "0.5px solid rgba(255,255,255,.06)" }}>
@@ -235,7 +275,7 @@ export default function EditProfile() {
                 Link in bio
               </span>
             </div>
-            <div className="flex flex-col divide-y" style={{ borderColor: "rgba(255,255,255,.06)" }}>
+            <div className="flex flex-col">
               <div className="flex items-center px-4 py-3 gap-3">
                 <span className="text-sm w-24 flex-shrink-0" style={{ color: "rgba(255,255,255,.4)" }}>Titolo</span>
                 <input type="text" value={linkBioTitle}
@@ -283,6 +323,7 @@ export default function EditProfile() {
             style={{ border: "1px solid rgba(255,255,255,.1)", color: "rgba(255,255,255,.4)" }}>
             Esci dall'account
           </button>
+
         </div>
       </div>
     </div>

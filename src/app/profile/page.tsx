@@ -111,12 +111,19 @@ export default function Profile() {
             ))}
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 mt-4">
-            <button className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
-              style={{ border: "1px solid rgba(255,255,255,.2)" }}>
-              Modifica profilo
-            </button>
+         {/* Actions */}
+<div className="flex gap-2 mt-4">
+  <a href="/profile/edit"
+    className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm text-center"
+    style={{
+      border: "1px solid rgba(255,255,255,.2)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      textDecoration: "none",
+    }}>
+    Modifica profilo
+  </a>
             <button className="rounded-xl flex items-center justify-center"
               style={{ width: 42, height: 42, border: "1px solid rgba(255,255,255,.2)" }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"

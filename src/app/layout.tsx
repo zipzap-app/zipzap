@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
   title: "ZipZap",
@@ -14,9 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="it">
-      <body style={{ paddingBottom: 80, background: "#0a0a0a" }}>
+      <body style={{ margin: 0, padding: 0, background: "#000" }}>
         {children}
-        <Navbar />
       </body>
     </html>
   );
