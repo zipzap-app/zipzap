@@ -33,6 +33,7 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState("video");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [bookmarks, setBookmarks] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [followersCount, setFollowersCount] = useState(0);
 
@@ -42,14 +43,21 @@ export default function Profile() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "/login"; return; }
 
-      const [{ data: profileData }, { data: postsData }, { count: followers }] = await Promise.all([
+      const [
+        { data: profileData },
+        { data: postsData },
+        { count: followers },
+        { data: bookmarksData },
+      ] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
+        supabase.from("bookmarks").select("post_id, posts(id, type, media_url, caption, likes_count, comments_count, views_count)").eq("user_id", user.id),
       ]);
 
       if (profileData) setProfile(profileData);
       if (postsData) setPosts(postsData);
+      if (bookmarksData) setBookmarks(bookmarksData.map((b: any) => b.posts).filter(Boolean));
       setFollowersCount(followers || 0);
       setLoading(false);
     }
@@ -58,11 +66,10 @@ export default function Profile() {
 
   const initials = profile?.full_name?.[0]?.toUpperCase() || profile?.username?.[0]?.toUpperCase() || "?";
 
-  const filteredPosts = posts.filter((p) => {
+  const filteredPosts = activeTab === "preferiti" ? bookmarks : posts.filter((p) => {
     if (activeTab === "video") return p.type === "video";
     if (activeTab === "foto") return p.type === "photo";
     if (activeTab === "testo") return p.type === "text";
-    if (activeTab === "linkati") return false;
     return true;
   });
 
@@ -190,8 +197,8 @@ export default function Profile() {
           <div style={{ color: "rgba(255,255,255,.4)", fontSize: 13, marginTop: 4 }}>
             @{profile?.username || "utente"}{profile?.category ? ` · ${profile.category}` : ""}
           </div>
-          {profile?.bio && (
-            <div style={{ color: "rgba(255,255,255,.7)", fontSize: 14, marginTop: 10, lineHeight: 1.6, maxWidth: 500 }}>
+          {profile?.bio && profile.bio.trim() !== "" && (
+            <div style={{ color: "rgba(255,255,255,.75)", fontSize: 14, marginTop: 10, lineHeight: 1.6, maxWidth: 500, whiteSpace: "pre-wrap" }}>
               {profile.bio}
             </div>
           )}
@@ -245,9 +252,14 @@ export default function Profile() {
 
         {/* Tabs */}
         <div style={{ display: "flex", borderBottom: "0.5px solid rgba(255,255,255,.07)", padding: "0 24px", marginTop: 8 }}>
-          {["video", "foto", "testo", "linkati"].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex: 1, textAlign: "center", padding: "12px 0", fontWeight: 600, fontSize: 12, textTransform: "capitalize", color: activeTab === tab ? "#fff" : "rgba(255,255,255,.3)", background: "transparent", border: "none", borderBottom: activeTab === tab ? "2px solid #FF4D4D" : "2px solid transparent", cursor: "pointer" }}>
-              {tab}
+          {[
+            { key: "video", label: "Video" },
+            { key: "foto", label: "Foto" },
+            { key: "testo", label: "Testo" },
+            { key: "preferiti", label: "⭐ Salvati" },
+          ].map((tab) => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{ flex: 1, textAlign: "center", padding: "12px 0", fontWeight: 600, fontSize: 11, color: activeTab === tab.key ? "#fff" : "rgba(255,255,255,.3)", background: "transparent", border: "none", borderBottom: activeTab === tab.key ? "2px solid #FF4D4D" : "2px solid transparent", cursor: "pointer" }}>
+              {tab.label}
             </button>
           ))}
         </div>
@@ -255,21 +267,30 @@ export default function Profile() {
         {/* Grid post */}
         {filteredPosts.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,77,77,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#FF4D4D" strokeWidth="1.5">
-                <rect x="2" y="4" width="13" height="14" rx="2" /><path d="M15 8l5-3v10l-5-3" />
-              </svg>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: activeTab === "preferiti" ? "rgba(255,200,0,.1)" : "rgba(255,77,77,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {activeTab === "preferiti" ? (
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#FFD700" strokeWidth="1.5">
+                  <path d="M4 3h12v15l-6-4-6 4V3z" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#FF4D4D" strokeWidth="1.5">
+                  <rect x="2" y="4" width="13" height="14" rx="2" /><path d="M15 8l5-3v10l-5-3" />
+                </svg>
+              )}
             </div>
             <p style={{ color: "rgba(255,255,255,.3)", fontSize: 13, textAlign: "center", lineHeight: 1.6 }}>
-              Nessun contenuto ancora.<br />
-              <a href="/create" style={{ color: "#FF4D4D", textDecoration: "none", fontWeight: 600 }}>Pubblica il primo ⚡</a>
+              {activeTab === "preferiti"
+                ? "Nessun post salvato ancora.\nSalva i post che ti piacciono dal feed."
+                : <>Nessun contenuto ancora.<br /><a href="/create" style={{ color: "#FF4D4D", textDecoration: "none", fontWeight: 600 }}>Pubblica il primo ⚡</a></>
+              }
             </p>
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, marginTop: 2 }}>
             {filteredPosts.map((p) => (
-              <div key={p.id} style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
-                {/* Thumbnail */}
+              <div key={p.id} onClick={() => window.location.href = "/feed"}
+                style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
+
                 {p.media_url && p.type === "video" && (
                   <video src={p.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
                 )}
@@ -277,15 +298,13 @@ export default function Profile() {
                   <img src={p.media_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 )}
                 {!p.media_url && (
-                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a1a" }}>
-                    <span style={{ color: "rgba(255,255,255,.15)", fontSize: 11, padding: 8, textAlign: "center" }}>{p.caption?.slice(0, 30)}</span>
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a1a2e, #0a0a1a)", padding: 8 }}>
+                    <span style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center" }}>{p.caption?.slice(0, 40)}</span>
                   </div>
                 )}
 
-                {/* Overlay con stats */}
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%)" }} />
 
-                {/* Icona video */}
                 {p.type === "video" && (
                   <div style={{ position: "absolute", top: 6, right: 6 }}>
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5">
@@ -295,7 +314,14 @@ export default function Profile() {
                   </div>
                 )}
 
-                {/* Views in basso */}
+                {activeTab === "preferiti" && (
+                  <div style={{ position: "absolute", top: 6, left: 6 }}>
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="#FFD700" stroke="#FFD700" strokeWidth="1">
+                      <path d="M4 3h12v15l-6-4-6 4V3z" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                )}
+
                 <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", alignItems: "center", gap: 3 }}>
                   <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5">
                     <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />

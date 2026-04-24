@@ -391,21 +391,21 @@ export default function Feed() {
         )}
       </div>
 
-      {/* Frecce navigazione */}
-      <div style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-        <button onClick={() => setCurrent(c => Math.max(0, c - 1))}
-          style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
-            <path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <button onClick={() => setCurrent(c => Math.min(posts.length - 1, c + 1))}
-          style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
-            <path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
+      {/* Frecce navigazione — sinistra */}
+<div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+  <button onClick={() => setCurrent(c => Math.max(0, c - 1))}
+    style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
+      <path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </button>
+  <button onClick={() => setCurrent(c => Math.min(posts.length - 1, c + 1))}
+    style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
+      <path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </button>
+</div>
 
       {/* Navbar mobile bottom */}
       <div className="zz-mobile" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, display: "flex", alignItems: "center", justifyContent: "space-around", padding: "10px 16px 28px", background: "rgba(0,0,0,.88)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
