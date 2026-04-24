@@ -20,6 +20,8 @@ type Post = {
   linkMeta: string;
   earn: string;
   type: string;
+  mediaUrl: string;
+  postType: string;
 };
 
 const mockPosts: Post[] = [
@@ -29,6 +31,7 @@ const mockPosts: Post[] = [
     hashtags: "#astronomia #fotografia #italia",
     likes: 41200, comments: 3100, shares: 8700,
     hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO",
+    mediaUrl: "", postType: "text",
   },
   {
     id: "2", userId: "user-2", user: "mario.reviews", initials: "MR", color: "#0d3320",
@@ -36,7 +39,7 @@ const mockPosts: Post[] = [
     hashtags: "#tech #gadget #recensione",
     likes: 5600, comments: 387, shares: 1100,
     hasLink: true, linkName: "Sony WF-1000XM5 · €249", linkMeta: "amazon.it · browser nativo",
-    earn: "+€6", type: "LINK",
+    earn: "+€6", type: "LINK", mediaUrl: "", postType: "text",
   },
   {
     id: "3", userId: "user-3", user: "vale.beats", initials: "VB", color: "#3d0a2e",
@@ -44,6 +47,7 @@ const mockPosts: Post[] = [
     hashtags: "#musica #produzione #beatmaking",
     likes: 98000, comments: 14000, shares: 22000,
     hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO",
+    mediaUrl: "", postType: "text",
   },
 ];
 
@@ -148,6 +152,8 @@ export default function Feed() {
             linkMeta: p.link_url ? "apre nel browser" : "",
             earn: "+€6",
             type: p.link_url ? "LINK" : "LIBERO",
+            mediaUrl: p.media_url || "",
+            postType: p.type || "text",
           })));
         } else {
           setPosts(mockPosts);
@@ -192,6 +198,26 @@ export default function Feed() {
         @media (max-width: 768px) { .zz-desktop { display: none !important; } }
         @media (min-width: 769px) { .zz-mobile { display: none !important; } }
       `}</style>
+
+      {/* Media fullscreen */}
+      {post.mediaUrl && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+          {post.postType === "video" ? (
+            <video
+              key={post.id}
+              src={post.mediaUrl}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              autoPlay loop muted playsInline
+            />
+          ) : (
+            <img
+              src={post.mediaUrl}
+              alt="post"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )}
+        </div>
+      )}
 
       {/* Overlay */}
       <div style={{ position: "absolute", inset: 0, zIndex: 1, background: "linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.05) 45%, rgba(0,0,0,.3) 100%)" }} />
