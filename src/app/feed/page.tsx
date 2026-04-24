@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFollow } from "@/hooks/usePost";
 import Comments from "@/components/Comments";
 import { createClient } from "@/lib/supabase/client";
@@ -59,9 +59,17 @@ function formatCount(n: number) {
   return String(n);
 }
 
-function PostActions({ post, onComment }: { post: Post; onComment: () => void }) {
+function PostActions({ post, onComment, muted, onToggleMute, volume, onVolumeChange }: {
+  post: Post;
+  onComment: () => void;
+  muted: boolean;
+  onToggleMute: () => void;
+  volume: number;
+  onVolumeChange: (v: number) => void;
+}) {
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes);
+  const [showVolume, setShowVolume] = useState(false);
   const { following, toggleFollow } = useFollow(post.userId, false);
 
   function toggleLike() {
@@ -71,6 +79,8 @@ function PostActions({ post, onComment }: { post: Post; onComment: () => void })
 
   return (
     <div style={{ position: "absolute", right: 16, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+
+      {/* Avatar + segui */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         <button onClick={toggleFollow} style={{ width: 44, height: 44, borderRadius: "50%", border: `2px solid ${following ? "#FF4D4D" : "rgba(255,255,255,.8)"}`, background: post.color, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
           {post.initials}
@@ -79,14 +89,18 @@ function PostActions({ post, onComment }: { post: Post; onComment: () => void })
           {following ? "✓" : "+"}
         </button>
       </div>
+
+      {/* Like */}
       <button onClick={toggleLike} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
-        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 48, height: 48, borderRadius: "50%", background: liked ? "rgba(255,77,77,.25)" : "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="22" height="22" viewBox="0 0 20 20" fill={liked ? "#FF4D4D" : "none"} stroke={liked ? "#FF4D4D" : "#fff"} strokeWidth="1.6">
             <path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" />
           </svg>
         </div>
         <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(likesCount)}</span>
       </button>
+
+      {/* Commenti */}
       <button onClick={onComment} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
         <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6">
@@ -95,6 +109,8 @@ function PostActions({ post, onComment }: { post: Post; onComment: () => void })
         </div>
         <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(post.comments)}</span>
       </button>
+
+      {/* Condividi */}
       <button style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}
         onClick={() => {
           if (navigator.share) navigator.share({ title: post.user, text: post.caption, url: window.location.href });
@@ -108,6 +124,49 @@ function PostActions({ post, onComment }: { post: Post; onComment: () => void })
         </div>
         <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(post.shares)}</span>
       </button>
+
+      {/* Volume — solo se c'è video */}
+      {post.postType === "video" && post.mediaUrl && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          <button
+            onClick={() => { onToggleMute(); setShowVolume((v) => !v); }}
+            style={{ width: 48, height: 48, borderRadius: "50%", background: muted ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.15)", border: muted ? "1px solid rgba(255,77,77,.4)" : "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            {muted ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#FF4D4D" strokeWidth="1.6">
+                <path d="M3 7h3l4-4v14l-4-4H3z" />
+                <path d="M14 7l3 3-3 3M17 7l-3 3 3 3" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6">
+                <path d="M3 7h3l4-4v14l-4-4H3z" />
+                <path d="M13 7a4 4 0 0 1 0 6M15 5a7 7 0 0 1 0 10" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+
+          {/* Slider volume verticale */}
+          {showVolume && !muted && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "rgba(0,0,0,.6)", borderRadius: 20, padding: "12px 8px" }}>
+              <input
+                type="range" min="0" max="1" step="0.05"
+                value={volume}
+                onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+                style={{
+                  writingMode: "vertical-lr" as any,
+                  direction: "rtl" as any,
+                  width: 4,
+                  height: 80,
+                  cursor: "pointer",
+                  accentColor: "#FF4D4D",
+                }}
+              />
+              <span style={{ color: "rgba(255,255,255,.6)", fontSize: 9 }}>{Math.round(volume * 100)}%</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Guadagno affiliato */}
       {post.hasLink && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <div style={{ background: "rgba(29,158,117,.3)", border: "1px solid rgba(29,158,117,.6)", color: "#4dffb8", fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "3px 8px" }}>
@@ -125,6 +184,9 @@ export default function Feed() {
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [current, setCurrent] = useState(0);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     async function loadPosts() {
@@ -166,6 +228,26 @@ export default function Feed() {
     loadPosts();
   }, []);
 
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume;
+      videoRef.current.muted = muted;
+    }
+  }, [volume, muted, current]);
+
+  function handleVolumeChange(v: number) {
+    setVolume(v);
+    if (videoRef.current) videoRef.current.volume = v;
+    if (v === 0) setMuted(true);
+    else setMuted(false);
+  }
+
+  function handleToggleMute() {
+    const newMuted = !muted;
+    setMuted(newMuted);
+    if (videoRef.current) videoRef.current.muted = newMuted;
+  }
+
   if (loadingPosts) {
     return (
       <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
@@ -197,6 +279,7 @@ export default function Feed() {
       <style>{`
         @media (max-width: 768px) { .zz-desktop { display: none !important; } }
         @media (min-width: 769px) { .zz-mobile { display: none !important; } }
+        input[type=range] { -webkit-appearance: slider-vertical; }
       `}</style>
 
       {/* Media fullscreen */}
@@ -204,26 +287,24 @@ export default function Feed() {
         <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
           {post.postType === "video" ? (
             <video
+              ref={videoRef}
               key={post.id}
               src={post.mediaUrl}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              autoPlay loop muted playsInline
+              autoPlay loop playsInline
+              muted={muted}
             />
           ) : (
-            <img
-              src={post.mediaUrl}
-              alt="post"
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
+            <img src={post.mediaUrl} alt="post" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           )}
         </div>
       )}
 
-      {/* Overlay */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 1, background: "linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.05) 45%, rgba(0,0,0,.3) 100%)" }} />
+      {/* Overlay gradiente */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 1, background: "linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.35) 100%)" }} />
 
       {/* Navbar sinistra desktop */}
-      <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 220, display: "flex", flexDirection: "column", gap: 6, padding: "32px 20px", background: "rgba(0,0,0,.45)", borderRight: "0.5px solid rgba(255,255,255,.08)" }}>
+      <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 220, display: "flex", flexDirection: "column", gap: 6, padding: "32px 20px", background: "rgba(0,0,0,.5)", borderRight: "0.5px solid rgba(255,255,255,.08)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
@@ -270,22 +351,22 @@ export default function Feed() {
         <span style={{ color: "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Seguiti</span>
       </div>
 
-      {/* Contenuto post */}
+      {/* Contenuto post in basso */}
       <div style={{ position: "absolute", bottom: 100, left: 16, right: 80, zIndex: 20 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 520 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid rgba(255,255,255,.9)", background: post.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
               {post.initials}
             </div>
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>@{post.user}</span>
-            <span style={{ border: "1.5px solid rgba(255,255,255,.6)", borderRadius: 20, padding: "2px 10px", color: "#fff", fontSize: 12, fontWeight: 600 }}>+ Segui</span>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16, textShadow: "0 1px 4px rgba(0,0,0,.5)" }}>@{post.user}</span>
+            <span style={{ border: "1.5px solid rgba(255,255,255,.7)", borderRadius: 20, padding: "2px 10px", color: "#fff", fontSize: 12, fontWeight: 600 }}>+ Segui</span>
           </div>
-          <p style={{ color: "rgba(255,255,255,.95)", fontSize: 15, lineHeight: 1.55, maxWidth: 440 }}>
+          <p style={{ color: "#fff", fontSize: 15, lineHeight: 1.55, maxWidth: 440, textShadow: "0 1px 6px rgba(0,0,0,.6)" }}>
             {post.caption}
           </p>
-          {post.hashtags && <p style={{ color: "rgba(255,255,255,.5)", fontSize: 13 }}>{post.hashtags}</p>}
+          {post.hashtags && <p style={{ color: "rgba(255,255,255,.6)", fontSize: 13 }}>{post.hashtags}</p>}
           {post.hasLink && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(0,0,0,.55)", border: "1px solid rgba(255,77,77,.5)", borderRadius: 12, padding: "9px 14px", maxWidth: 320, cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,77,77,.5)", borderRadius: 12, padding: "9px 14px", maxWidth: 320, cursor: "pointer" }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,77,77,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#FF4D4D" strokeWidth="1.4">
                   <path d="M5 7a2 2 0 0 0 2.8 0l1.4-1.4a2 2 0 0 0-2.8-2.8L5.5 3.4" strokeLinecap="round" />
@@ -303,16 +384,23 @@ export default function Feed() {
       </div>
 
       {/* Azioni destra */}
-      <PostActions post={post} onComment={() => setCommentPostId(post.id)} />
+      <PostActions
+        post={post}
+        onComment={() => setCommentPostId(post.id)}
+        muted={muted}
+        onToggleMute={handleToggleMute}
+        volume={volume}
+        onVolumeChange={handleVolumeChange}
+      />
 
       {/* Frecce navigazione */}
       <div style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-        <button onClick={() => setCurrent((c) => Math.max(0, c - 1))} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={() => { setCurrent((c) => Math.max(0, c - 1)); }} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
             <path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <button onClick={() => setCurrent((c) => Math.min(posts.length - 1, c + 1))} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={() => { setCurrent((c) => Math.min(posts.length - 1, c + 1)); }} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8">
             <path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
