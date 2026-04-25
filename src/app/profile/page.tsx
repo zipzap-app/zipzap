@@ -462,14 +462,10 @@ export default function Profile() {
             </button>
 
             {/* Modifica */}
-            <button onClick={() => {
-              setEditingPost(postMenu);
-              setEditCaption(postMenu.caption || "");
-              setEditLinkUrl((postMenu as any).link_url || "");
-            }}
-              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
-              ✏️ Modifica post
-            </button>
+<button onClick={() => { window.location.href = `/edit-post/${postMenu.id}`; setPostMenu(null); }}
+  style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+  ✏️ Modifica post
+</button>
 
             {/* Elimina */}
             <button onClick={async () => {
