@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -59,6 +59,9 @@ function TextOverlayEditor({
   const [editing, setEditing] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number } | null>(null);
+  const elementsRef = useRef(elements);
+  elementsRef.current = elements;
+
   const selectedEl = elements.find(e => e.id === selected);
 
   function addText() {
@@ -73,20 +76,21 @@ function TextOverlayEditor({
   }
 
   function updateEl(id: string, changes: Partial<TextElement>) {
-    setElements(elements.map(e => e.id === id ? { ...e, ...changes } : e));
+    setElements(elementsRef.current.map(e => e.id === id ? { ...e, ...changes } : e));
   }
 
   function deleteEl(id: string) {
-    setElements(elements.filter(e => e.id !== id));
+    setElements(elementsRef.current.filter(e => e.id !== id));
     setSelected(null);
   }
 
   function onMouseDown(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     setSelected(id);
-    const el = elements.find(el => el.id === id);
+    const el = elementsRef.current.find(el => el.id === id);
     if (!el) return;
     dragRef.current = { id, startX: e.clientX, startY: e.clientY, elemX: el.x, elemY: el.y };
+
     function onMouseMove(ev: MouseEvent) {
       if (!dragRef.current || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
@@ -94,13 +98,15 @@ function TextOverlayEditor({
       const dy = ((ev.clientY - dragRef.current.startY) / rect.height) * 100;
       const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElements(elements.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+      setElements(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
+
     function onMouseUp() {
       dragRef.current = null;
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     }
+
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   }
@@ -108,10 +114,11 @@ function TextOverlayEditor({
   function onTouchStart(e: React.TouchEvent, id: string) {
     e.stopPropagation();
     setSelected(id);
-    const el = elements.find(el => el.id === id);
+    const el = elementsRef.current.find(el => el.id === id);
     if (!el) return;
     const touch = e.touches[0];
     dragRef.current = { id, startX: touch.clientX, startY: touch.clientY, elemX: el.x, elemY: el.y };
+
     function onTouchMove(ev: TouchEvent) {
       if (!dragRef.current || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
@@ -120,13 +127,15 @@ function TextOverlayEditor({
       const dy = ((t.clientY - dragRef.current.startY) / rect.height) * 100;
       const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElements(elements.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+      setElements(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
+
     function onTouchEnd() {
       dragRef.current = null;
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
     }
+
     window.addEventListener("touchmove", onTouchMove);
     window.addEventListener("touchend", onTouchEnd);
   }
@@ -162,7 +171,10 @@ function TextOverlayEditor({
               onDoubleClick={(e) => { e.stopPropagation(); setSelected(el.id); setEditing(true); }}
               style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, cursor: "move", userSelect: "none", outline: selected === el.id ? "2px solid #FF4D4D" : "none", borderRadius: 6, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", maxWidth: "70%" }}>
               {editing && selected === el.id ? (
-                <input autoFocus value={el.text} onChange={e => updateEl(el.id, { text: e.target.value })} onBlur={() => setEditing(false)} onClick={e => e.stopPropagation()}
+                <input autoFocus value={el.text}
+                  onChange={e => updateEl(el.id, { text: e.target.value })}
+                  onBlur={() => setEditing(false)}
+                  onClick={e => e.stopPropagation()}
                   style={{ background: "transparent", border: "none", outline: "none", color: el.color, fontFamily: fontObj?.family, fontSize: el.size, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", textAlign: el.align, width: Math.max(80, el.text.length * el.size * 0.6), minWidth: 60 }} />
               ) : (
                 <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", textAlign: el.align, display: "block", whiteSpace: "nowrap" }}>
@@ -267,33 +279,34 @@ function TextOverlayEditor({
 export default function EditPost() {
   const router = useRouter();
   const params = useParams();
-  const postId = params.id as string;
+  const postId = params?.id as string;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
   const [caption, setCaption] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [visibility, setVisibility] = useState<"public" | "friends" | "private">("public");
   const [postType, setPostType] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
-
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [showTextEditor, setShowTextEditor] = useState(false);
-
   const [showMusic, setShowMusic] = useState(false);
   const [musicTab, setMusicTab] = useState<"library" | "original">("library");
   const [selectedTrack, setSelectedTrack] = useState<{ id: string; title: string; artist: string; url?: string } | null>(null);
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<Record<string, number>>({});
+  const [trackProgress, setTrackProgress] = useState<Record<string, number>>({});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
+  const loadedRef = useRef(false);
 
   useEffect(() => {
+    if (loadedRef.current || !postId) return;
+    loadedRef.current = true;
+
     async function loadPost() {
       const supabase = createClient();
       const { data } = await supabase.from("posts").select("*").eq("id", postId).single();
@@ -303,12 +316,16 @@ export default function EditPost() {
       setVisibility(data.visibility || "public");
       setPostType(data.type || "text");
       setMediaUrl(data.media_url || "");
-      if (data.overlay_data) setTextElements(data.overlay_data);
-      if (data.music_title) setSelectedTrack({ id: "existing", title: data.music_title, artist: data.music_artist || "", url: data.music_url });
+      if (data.overlay_data && Array.isArray(data.overlay_data)) setTextElements(data.overlay_data);
+      if (data.music_title) setSelectedTrack({ id: "existing", title: data.music_title, artist: data.music_artist || "", url: data.music_url || undefined });
       setLoading(false);
     }
     loadPost();
-    return () => { if (audioRef.current) audioRef.current.pause(); if (progressInterval.current) clearInterval(progressInterval.current); };
+
+    return () => {
+      if (audioRef.current) audioRef.current.pause();
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
   }, [postId]);
 
   function stopPreview() {
@@ -324,11 +341,14 @@ export default function EditPost() {
     audioRef.current = audio;
     audio.play();
     setPlayingId(track.id);
-    setProgress(p => ({ ...p, [track.id]: 0 }));
+    setTrackProgress(p => ({ ...p, [track.id]: 0 }));
     progressInterval.current = setInterval(() => {
-      if (audio.duration) setProgress(p => ({ ...p, [track.id]: (audio.currentTime / audio.duration) * 100 }));
+      if (audio.duration) setTrackProgress(p => ({ ...p, [track.id]: (audio.currentTime / audio.duration) * 100 }));
     }, 200);
-    audio.onended = () => { setPlayingId(null); setProgress(p => ({ ...p, [track.id]: 0 })); if (progressInterval.current) clearInterval(progressInterval.current); };
+    audio.onended = () => {
+      setPlayingId(null);
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
   }
 
   function selectTrack(track: typeof libraryTracks[0]) {
@@ -413,7 +433,12 @@ export default function EditPost() {
   if (loading) {
     return (
       <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
-        <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Caricamento...</p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
+          </div>
+          <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Caricamento...</p>
+        </div>
       </div>
     );
   }
@@ -440,19 +465,16 @@ export default function EditPost() {
             {postType === "video"
               ? <video src={mediaUrl} style={{ width: "100%", height: "100%", objectFit: "contain" }} muted />
               : <img src={mediaUrl} style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
-
-            {/* Preview testo overlay */}
             {textElements.map(el => {
               const fontObj = FONTS.find(f => f.id === el.font);
               return (
-                <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
+                <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4, pointerEvents: "none" }}>
                   <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                     {el.text}
                   </span>
                 </div>
               );
             })}
-
             <button onClick={() => setShowTextEditor(true)}
               style={{ position: "absolute", top: 10, right: 10, padding: "5px 10px", borderRadius: 8, background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
               Aa {textElements.length > 0 ? `(${textElements.length})` : ""}
@@ -460,8 +482,8 @@ export default function EditPost() {
           </div>
         )}
 
-        {/* Testo overlay per post di testo */}
-        {postType === "text" && (
+        {/* Editor testo per post testuali */}
+        {!mediaUrl && (
           <button onClick={() => setShowTextEditor(true)}
             style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", cursor: "pointer", marginBottom: 16 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: textElements.length > 0 ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -528,7 +550,7 @@ export default function EditPost() {
                   {libraryTracks.map((track) => {
                     const isPlaying = playingId === track.id;
                     const isSelected = selectedTrack?.id === track.id;
-                    const prog = progress[track.id] || 0;
+                    const prog = trackProgress[track.id] || 0;
                     return (
                       <div key={track.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "0.5px solid rgba(255,255,255,.05)", background: isSelected ? "rgba(255,77,77,.06)" : "transparent" }}>
                         <button onClick={() => togglePreview(track)}
