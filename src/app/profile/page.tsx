@@ -54,6 +54,10 @@ export default function Profile() {
   const [productMenu, setProductMenu] = useState<Product | null>(null);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editCaption, setEditCaption] = useState("");
+  const [editLinkUrl, setEditLinkUrl] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -69,7 +73,7 @@ export default function Profile() {
         { data: productsData },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count, visibility").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count, visibility, link_url").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
         supabase.from("bookmarks").select("post_id, posts(id, type, media_url, caption, likes_count, comments_count, views_count, visibility)").eq("user_id", user.id),
         supabase.from("products").select("*").eq("seller_id", user.id).order("created_at", { ascending: false }),
@@ -95,6 +99,24 @@ export default function Profile() {
   });
 
   const totalLikes = posts.reduce((sum, p) => sum + (p.likes_count || 0), 0);
+
+  function openPostInFeed(postId: string) {
+    window.location.href = `/feed?postId=${postId}`;
+  }
+
+  async function savePostEdit() {
+    if (!editingPost) return;
+    setSavingEdit(true);
+    const supabase = createClient();
+    await supabase.from("posts").update({
+      caption: editCaption,
+      link_url: editLinkUrl || null,
+    }).eq("id", editingPost.id);
+    setPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, caption: editCaption } : p));
+    setSavingEdit(false);
+    setEditingPost(null);
+    setPostMenu(null);
+  }
 
   if (loading) {
     return (
@@ -143,6 +165,10 @@ export default function Profile() {
             {item.label}
           </a>
         ))}
+        <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 14, marginTop: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M7 1v12M1 7h12" strokeLinecap="round" /></svg>
+          Crea contenuto
+        </a>
       </div>
 
       {/* Navbar mobile bottom */}
@@ -272,8 +298,6 @@ export default function Profile() {
         {/* Tab prodotti */}
         {activeTab === "prodotti" ? (
           <div style={{ padding: "16px 24px" }}>
-
-            {/* Header prodotti */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ color: "rgba(255,255,255,.4)", fontSize: 12 }}>
                 {products.length} prodott{products.length === 1 ? "o" : "i"} pubblicat{products.length === 1 ? "o" : "i"}
@@ -285,13 +309,7 @@ export default function Profile() {
 
             {products.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 0", gap: 12 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,77,77,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#FF4D4D" strokeWidth="1.5">
-                    <rect x="2" y="3" width="18" height="16" rx="2" />
-                    <path d="M7 3v4M15 3v4M2 11h18" />
-                  </svg>
-                </div>
-                <p style={{ color: "rgba(255,255,255,.3)", fontSize: 13, textAlign: "center", lineHeight: 1.6 }}>
+                <p style={{ color: "rgba(255,255,255,.3)", fontSize: 13, textAlign: "center" }}>
                   Nessun prodotto ancora.<br />
                   <a href="/sell" style={{ color: "#FF4D4D", textDecoration: "none", fontWeight: 600 }}>Inizia a vendere ⚡</a>
                 </p>
@@ -300,15 +318,11 @@ export default function Profile() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {products.map((p) => (
                   <div key={p.id} style={{ display: "flex", gap: 12, padding: 12, borderRadius: 16, background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
-
-                    {/* Immagine */}
                     <div style={{ width: 72, height: 72, borderRadius: 12, background: "#1a1a2e", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {p.images?.[0]
                         ? <img src={p.images[0]} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         : <span style={{ fontSize: 24, opacity: .2 }}>📦</span>}
                     </div>
-
-                    {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                         <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
@@ -320,7 +334,6 @@ export default function Profile() {
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
                         <div style={{ color: "#fff", fontWeight: 900, fontSize: 16 }}>€{p.price.toFixed(2)}</div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          {/* Toggle attivo/disattivo */}
                           <button onClick={async () => {
                             const supabase = createClient();
                             await supabase.from("products").update({ active: !p.active }).eq("id", p.id);
@@ -328,7 +341,6 @@ export default function Profile() {
                           }} style={{ padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: p.active ? "rgba(29,158,117,.2)" : "rgba(255,255,255,.08)", color: p.active ? "#4dffb8" : "rgba(255,255,255,.4)" }}>
                             {p.active ? "✓ Attivo" : "Disattivato"}
                           </button>
-                          {/* Menu */}
                           <button onClick={() => setProductMenu(p)}
                             style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.08)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <svg width="14" height="14" viewBox="0 0 14 14" fill="rgba(255,255,255,.6)">
@@ -345,7 +357,6 @@ export default function Profile() {
           </div>
 
         ) : (
-          /* Grid post / preferiti */
           filteredPosts.length === 0 ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 24px", gap: 12 }}>
               <div style={{ width: 48, height: 48, borderRadius: 12, background: activeTab === "preferiti" ? "rgba(255,200,0,.1)" : "rgba(255,77,77,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -362,7 +373,9 @@ export default function Profile() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, marginTop: 2 }}>
               {filteredPosts.map((p) => (
-                <div key={p.id} style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
+                <div key={p.id}
+                  onClick={() => openPostInFeed(p.id)}
+                  style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
                   {p.media_url && p.type === "video" && (
                     <video src={p.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
                   )}
@@ -407,13 +420,15 @@ export default function Profile() {
       </div>
 
       {/* Modal gestione post */}
-      {postMenu && (
+      {postMenu && !editingPost && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.7)" }}
           onClick={() => setPostMenu(null)}>
           <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 4 }}>Gestisci post</div>
             <div style={{ color: "rgba(255,255,255,.35)", fontSize: 12, marginBottom: 20 }}>{postMenu.caption?.slice(0, 60) || "Post senza descrizione"}</div>
+
+            {/* Visibilità */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 10 }}>Visibilità</div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -439,6 +454,24 @@ export default function Profile() {
               </div>
               {savingVisibility && <p style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 8, textAlign: "center" }}>Salvataggio...</p>}
             </div>
+
+            {/* Apri nel feed */}
+            <button onClick={() => { openPostInFeed(postMenu.id); setPostMenu(null); }}
+              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+              ▶ Apri nel feed
+            </button>
+
+            {/* Modifica */}
+            <button onClick={() => {
+              setEditingPost(postMenu);
+              setEditCaption(postMenu.caption || "");
+              setEditLinkUrl((postMenu as any).link_url || "");
+            }}
+              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+              ✏️ Modifica post
+            </button>
+
+            {/* Elimina */}
             <button onClick={async () => {
               if (!confirm("Sei sicuro di voler eliminare questo post?")) return;
               const supabase = createClient();
@@ -448,7 +481,43 @@ export default function Profile() {
             }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,50,50,.1)", border: "1px solid rgba(255,50,50,.3)", color: "#FF4D4D", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
               🗑 Elimina post
             </button>
+
             <button onClick={() => setPostMenu(null)}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal modifica post */}
+      {editingPost && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.8)" }}
+          onClick={() => setEditingPost(null)}>
+          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 20 }}>✏️ Modifica post</div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Descrizione</label>
+              <textarea value={editCaption} onChange={e => setEditCaption(e.target.value.slice(0, 300))} rows={4}
+                style={{ width: "100%", padding: "12px 16px", borderRadius: 14, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
+              <div style={{ textAlign: "right", fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 4 }}>{editCaption.length}/300</div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Link affiliato</label>
+              <input type="url" value={editLinkUrl} onChange={e => setEditLinkUrl(e.target.value)}
+                placeholder="https://amazon.it/prodotto..."
+                style={{ width: "100%", padding: "12px 16px", borderRadius: 14, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#FF4D4D", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            </div>
+
+            <button onClick={savePostEdit} disabled={savingEdit}
+              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: savingEdit ? "#993333" : "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+              {savingEdit ? "Salvataggio..." : "Salva modifiche ⚡"}
+            </button>
+
+            <button onClick={() => setEditingPost(null)}
               style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
               Annulla
             </button>
@@ -465,7 +534,6 @@ export default function Profile() {
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 4 }}>Gestisci prodotto</div>
             <div style={{ color: "rgba(255,255,255,.35)", fontSize: 12, marginBottom: 20 }}>{productMenu.name} · €{productMenu.price.toFixed(2)}</div>
 
-            {/* Toggle attivo */}
             <button onClick={async () => {
               const supabase = createClient();
               await supabase.from("products").update({ active: !productMenu.active }).eq("id", productMenu.id);
@@ -475,13 +543,11 @@ export default function Profile() {
               {productMenu.active ? "⏸ Disattiva prodotto" : "▶ Riattiva prodotto"}
             </button>
 
-            {/* Modifica */}
             <button onClick={() => { window.location.href = `/sell?edit=${productMenu.id}`; }}
               style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
               ✏️ Modifica prodotto
             </button>
 
-            {/* Elimina */}
             <button onClick={async () => {
               if (!confirm("Sei sicuro di voler eliminare questo prodotto?")) return;
               setDeletingProduct(true);
