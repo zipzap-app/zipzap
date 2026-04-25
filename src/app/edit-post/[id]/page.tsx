@@ -43,11 +43,7 @@ type TextElement = {
 };
 
 function TextOverlayEditor({
-  mediaPreview,
-  mediaType,
-  elements,
-  setElements,
-  onClose,
+  mediaPreview, mediaType, elements, setElements, onClose,
 }: {
   mediaPreview: string | null;
   mediaType: "video" | "photo" | "text";
@@ -87,13 +83,11 @@ function TextOverlayEditor({
   }
 
   function onMouseDown(e: React.MouseEvent, id: string) {
-    e.stopPropagation();
-    e.preventDefault();
+    e.stopPropagation(); e.preventDefault();
     setSelected(id);
     const el = elementsRef.current.find(el => el.id === id);
     if (!el) return;
     dragRef.current = { id, startX: e.clientX, startY: e.clientY, elemX: el.x, elemY: el.y };
-
     function onMouseMove(ev: MouseEvent) {
       if (!dragRef.current || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
@@ -103,13 +97,11 @@ function TextOverlayEditor({
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
       setElementsRef.current(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
-
     function onMouseUp() {
       dragRef.current = null;
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     }
-
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   }
@@ -121,7 +113,6 @@ function TextOverlayEditor({
     if (!el) return;
     const touch = e.touches[0];
     dragRef.current = { id, startX: touch.clientX, startY: touch.clientY, elemX: el.x, elemY: el.y };
-
     function onTouchMove(ev: TouchEvent) {
       ev.preventDefault();
       if (!dragRef.current || !canvasRef.current) return;
@@ -133,13 +124,11 @@ function TextOverlayEditor({
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
       setElementsRef.current(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
-
     function onTouchEnd() {
       dragRef.current = null;
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
     }
-
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onTouchEnd);
   }
@@ -154,13 +143,8 @@ function TextOverlayEditor({
 
       <div ref={canvasRef} onClick={(e) => { if (dragRef.current) return; setSelected(null); }}
         style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}>
-
-        {mediaPreview && mediaType === "video" && (
-          <video src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />
-        )}
-        {mediaPreview && mediaType === "photo" && (
-          <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
-        )}
+        {mediaPreview && mediaType === "video" && <video src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />}
+        {mediaPreview && mediaType === "photo" && <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />}
         {!mediaPreview && (
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0020, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ color: "rgba(255,255,255,.2)", fontSize: 13 }}>Anteprima</span>
@@ -289,6 +273,7 @@ export default function EditPost() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [caption, setCaption] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [visibility, setVisibility] = useState<"public" | "friends" | "private">("public");
@@ -314,15 +299,19 @@ export default function EditPost() {
 
     async function loadPost() {
       const supabase = createClient();
-      const { data } = await supabase.from("posts").select("*").eq("id", postId).single();
-      if (!data) { window.location.href = "/profile"; return; }
+      const { data, error } = await supabase.from("posts").select("*").eq("id", postId).single();
+      if (error || !data) { window.location.href = "/profile"; return; }
       setCaption(data.caption || "");
       setLinkUrl(data.link_url || "");
       setVisibility(data.visibility || "public");
       setPostType(data.type || "text");
       setMediaUrl(data.media_url || "");
-      if (data.overlay_data && Array.isArray(data.overlay_data)) setTextElements(data.overlay_data);
-      if (data.music_title) setSelectedTrack({ id: "existing", title: data.music_title, artist: data.music_artist || "", url: data.music_url || undefined });
+      if (data.overlay_data && Array.isArray(data.overlay_data) && data.overlay_data.length > 0) {
+        setTextElements(data.overlay_data);
+      }
+      if (data.music_title) {
+        setSelectedTrack({ id: "existing", title: data.music_title, artist: data.music_artist || "", url: data.music_url || undefined });
+      }
       setLoading(false);
     }
     loadPost();
@@ -371,7 +360,9 @@ export default function EditPost() {
 
   async function handleSave() {
     setSaving(true);
+    setSaveError("");
     stopPreview();
+
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
@@ -383,36 +374,55 @@ export default function EditPost() {
     if (uploadedAudio) {
       const ext = uploadedAudio.name.split(".").pop();
       const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("audio").upload(path, uploadedAudio, { upsert: true });
-      if (!error) {
-        const { data } = supabase.storage.from("audio").getPublicUrl(path);
-        musicUrl = data.publicUrl;
+      const { error, data } = await supabase.storage.from("audio").upload(path, uploadedAudio, { upsert: true });
+      if (!error && data) {
+        const { data: urlData } = supabase.storage.from("audio").getPublicUrl(path);
+        musicUrl = urlData.publicUrl;
         musicTitle = uploadedAudio.name.replace(/\.[^.]+$/, "");
         musicArtist = "Il mio audio";
       }
     }
 
-    const { error } = await supabase.from("posts").update({
+    // Costruisci l'oggetto update — usa undefined per non sovrascrivere campi non modificati
+    const updateObj: Record<string, any> = {
       caption,
       link_url: linkUrl || null,
       visibility,
       music_title: musicTitle,
       music_artist: musicArtist,
       music_url: musicUrl,
-      overlay_text: textElements.length > 0 ? textElements[0].text : null,
-      overlay_position: textElements.length > 0 ? "custom" : "bottom",
-      overlay_data: textElements.length > 0 ? textElements : null,
-    }).eq("id", postId);
+    };
+
+    // Overlay: aggiorna solo se ci sono elementi, altrimenti non toccare
+    if (textElements.length > 0) {
+      updateObj.overlay_text = textElements[0].text;
+      updateObj.overlay_position = "custom";
+      updateObj.overlay_data = textElements;
+    } else {
+      updateObj.overlay_text = null;
+      updateObj.overlay_position = "bottom";
+      updateObj.overlay_data = null;
+    }
+
+    console.log("Saving post:", postId, updateObj);
+
+    const { error, data } = await supabase
+      .from("posts")
+      .update(updateObj)
+      .eq("id", postId)
+      .select()
+      .single();
+
+    console.log("Save result:", { error, data });
 
     if (error) {
-      alert("Errore nel salvataggio: " + error.message);
+      setSaveError(`Errore: ${error.message} (code: ${error.code})`);
       setSaving(false);
       return;
     }
 
     setSaving(false);
     setSaved(true);
-    // window.location.href forza reload completo — feed e profilo ricaricano dal DB
     setTimeout(() => { window.location.href = "/profile"; }, 1500);
   }
 
@@ -635,6 +645,12 @@ export default function EditPost() {
               style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#FF4D4D", fontSize: 13 }} />
           </div>
         </div>
+
+        {saveError && (
+          <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, background: "rgba(255,50,50,.1)", border: "1px solid rgba(255,50,50,.3)", color: "#FF4D4D", fontSize: 13 }}>
+            {saveError}
+          </div>
+        )}
 
         <button onClick={handleSave} disabled={saving}
           style={{ width: "100%", padding: "16px 0", borderRadius: 16, fontWeight: 900, fontSize: 15, color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", background: saving ? "#993333" : "#FF4D4D" }}>
