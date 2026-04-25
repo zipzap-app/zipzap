@@ -99,7 +99,6 @@ export default function Feed() {
           const ids = (follows || []).map((f: any) => f.following_id);
           setFollowingIds(ids);
 
-          // Per te: public + friends se segui l'autore
           const { data } = await supabase
             .from("posts")
             .select("*, profiles(username, full_name, avatar_url)")
@@ -110,14 +109,13 @@ export default function Feed() {
             const filtered = data.filter((p: any) => {
               if (p.visibility === "private") return p.user_id === user.id;
               if (p.visibility === "friends") return ids.includes(p.user_id) || p.user_id === user.id;
-              return true; // public
+              return true;
             });
             setAllPosts(filtered.map(mapPost));
           } else {
             setAllPosts(mockPosts);
           }
         } else {
-          // Non loggato: solo public
           const { data } = await supabase
             .from("posts")
             .select("*, profiles(username, full_name, avatar_url)")
@@ -158,21 +156,21 @@ export default function Feed() {
   useEffect(() => { setCarouselIndex(0); }, [current]);
 
   // Gestione musica nel feed
-useEffect(() => {
-  if (musicRef.current) { musicRef.current.pause(); musicRef.current.src = ""; }
-  const post = posts[current];
-  if (post?.musicUrl) {
-    const audio = new Audio(post.musicUrl);
-    audio.volume = volume;
-    audio.loop = true;
-    if (!muted) audio.play().catch(() => {});
-    musicRef.current = audio;
-  }
-  return () => { if (musicRef.current) { musicRef.current.pause(); } };
-}, [current, posts]);
+  useEffect(() => {
+    if (musicRef.current) { musicRef.current.pause(); musicRef.current.src = ""; }
+    const post = posts[current];
+    if (post?.musicUrl) {
+      const audio = new Audio(post.musicUrl);
+      audio.volume = volume;
+      audio.loop = true;
+      if (!muted) audio.play().catch(() => {});
+      musicRef.current = audio;
+    }
+    return () => { if (musicRef.current) { musicRef.current.pause(); } };
+  }, [current, posts]);
 
   useEffect(() => {
-    if (musicRef.current) { musicRef.current.volume = volume; }
+    if (musicRef.current) musicRef.current.volume = volume;
     if (videoRef.current) { videoRef.current.muted = muted; videoRef.current.volume = volume; }
   }, [muted, volume]);
 
@@ -254,7 +252,6 @@ useEffect(() => {
 
   const post = posts[current];
 
-  // Seguiti vuoto
   if (feedTab === "seguiti" && !loadingFollowed && followedPosts.length === 0) {
     return (
       <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
@@ -296,7 +293,6 @@ useEffect(() => {
     </div>
   );
 
-  // Media corrente (carosello o singolo)
   const allMedia = post.mediaUrls?.length > 0 ? post.mediaUrls : (post.mediaUrl ? [post.mediaUrl] : []);
   const currentMedia = allMedia[carouselIndex] || post.mediaUrl;
   const isCarousel = allMedia.length > 1;
@@ -334,7 +330,6 @@ useEffect(() => {
           transform: post.overlayPosition === "center" ? "translateY(-50%)" : undefined,
           background: "rgba(0,0,0,.6)", borderRadius: 10, padding: "8px 14px",
           color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center",
-          backdropFilter: "blur(4px)",
           pointerEvents: "none",
         }}>
           {post.overlayText}
@@ -413,7 +408,6 @@ useEffect(() => {
           {post.caption && (
             <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.55, maxWidth: 400, textShadow: "0 1px 6px rgba(0,0,0,.8)" }}>{post.caption}</p>
           )}
-          {/* Musica in corso */}
           {post.musicTitle && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5">
@@ -422,12 +416,15 @@ useEffect(() => {
               <span style={{ color: "rgba(255,255,255,.7)", fontSize: 12 }}>{post.musicTitle} — {post.musicArtist}</span>
             </div>
           )}
-          {/* Carosello counter */}
           {isCarousel && (
             <span style={{ color: "rgba(255,255,255,.5)", fontSize: 11 }}>📷 {allMedia.length} foto</span>
           )}
-          {post.hasLink && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,77,77,.5)", borderRadius: 12, padding: "8px 12px", maxWidth: 300, cursor: "pointer" }}>
+
+          {/* Link affiliato — apre nel browser */}
+          {post.hasLink && post.linkName && (
+            <a href={post.linkName.startsWith("http") ? post.linkName : `https://${post.linkName}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,77,77,.5)", borderRadius: 12, padding: "8px 12px", maxWidth: 300, cursor: "pointer", textDecoration: "none" }}>
               <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(255,77,77,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#FF4D4D" strokeWidth="1.4">
                   <path d="M5 7a2 2 0 0 0 2.8 0l1.4-1.4a2 2 0 0 0-2.8-2.8L5.5 3.4" strokeLinecap="round" />
@@ -436,10 +433,10 @@ useEffect(() => {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ color: "#fff", fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.linkName}</div>
-                <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, marginTop: 1 }}>{post.linkMeta}</div>
+                <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, marginTop: 1 }}>Apri nel browser ↗</div>
               </div>
               <div style={{ background: "#FF4D4D", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>APRI</div>
-            </div>
+            </a>
           )}
         </div>
       </div>
@@ -573,8 +570,11 @@ useEffect(() => {
           <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 20 }}>Condividi</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <button onClick={() => { if (navigator.share) navigator.share({ title: post.user, text: post.caption, url: window.location.href }); else { navigator.clipboard.writeText(window.location.href); setShareMsg("Link copiato!"); } setShowShare(false); }}
-                style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: "none", cursor: "pointer", width: "100%" }}>
+              <button onClick={() => {
+                if (navigator.share) navigator.share({ title: post.user, text: post.caption, url: window.location.href });
+                else { navigator.clipboard.writeText(window.location.href); setShareMsg("Link copiato!"); }
+                setShowShare(false);
+              }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: "none", cursor: "pointer", width: "100%" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6"><circle cx="14" cy="3" r="2" /><circle cx="4" cy="10" r="2" /><circle cx="14" cy="17" r="2" /><path d="M6 9l6-4M6 11l6 4" strokeLinecap="round" /></svg>
                 </div>
@@ -583,8 +583,11 @@ useEffect(() => {
                   <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 2 }}>Invia tramite app</div>
                 </div>
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(window.location.href); setShareMsg("Link copiato! ✓"); setTimeout(() => setShareMsg(""), 2000); }}
-                style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: "none", cursor: "pointer", width: "100%" }}>
+              <button onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                setShareMsg("Link copiato! ✓");
+                setTimeout(() => setShareMsg(""), 2000);
+              }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: "none", cursor: "pointer", width: "100%" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6"><rect x="8" y="8" width="10" height="10" rx="2" /><path d="M4 12H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" /></svg>
                 </div>
