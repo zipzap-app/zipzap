@@ -181,17 +181,17 @@ export default function Create() {
 
     // Upload audio originale
     if (uploadedAudio) {
-      setUploadProgress(65);
-      const ext = uploadedAudio.name.split(".").pop();
-      const path = `${user.id}/audio/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("audio").upload(path, uploadedAudio, { upsert: true });
-      if (!error) {
-        const { data } = supabase.storage.from("audio").getPublicUrl(path);
-        musicUrl = data.publicUrl;
-      }
-    } else if (selectedTrack?.url) {
-      musicUrl = selectedTrack.url;
-    }
+  setUploadProgress(65);
+  const ext = uploadedAudio.name.split(".").pop();
+  const path = `${user.id}/${Date.now()}.${ext}`;
+  const { error: audioError } = await supabase.storage.from("audio").upload(path, uploadedAudio, { upsert: true });
+  if (!audioError) {
+    const { data } = supabase.storage.from("audio").getPublicUrl(path);
+    musicUrl = data.publicUrl;
+  } else {
+    console.error("Audio upload error:", audioError.message);
+  }
+}
 
     setUploadProgress(80);
 
