@@ -104,7 +104,7 @@ function TextOverlayEditor({
       const dy = ((ev.clientY - dragRef.current.startY) / rect.height) * 100;
       const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElements(prev => prev.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+      setElements((prev: TextElement[]) => prev.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
 
     function onMouseUp() {
@@ -134,7 +134,7 @@ function TextOverlayEditor({
       const dy = ((t.clientY - dragRef.current.startY) / rect.height) * 100;
       const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElements(prev => prev.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+      setElements((prev: TextElement[]) => prev.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
 
     function onTouchEnd() {
