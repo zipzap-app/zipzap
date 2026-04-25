@@ -21,53 +21,113 @@ const creators = [
 
 export default function Explore() {
   return (
-    <div className="fixed inset-0 overflow-y-auto" style={{ background: "#0a0a0a" }}>
-      <div className="max-w-2xl mx-auto px-4 py-8 pb-28">
+    <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: "#0a0a0a" }}>
+      <style>{`
+        body { margin: 0; }
+        .zz-nav { display: none; }
+        .zz-mob-bot { display: flex; }
+        .zz-content { margin-left: 0; }
+        @media (min-width: 769px) {
+          .zz-nav { display: flex; }
+          .zz-mob-bot { display: none; }
+          .zz-content { margin-left: 220px; }
+        }
+      `}</style>
 
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <Link href="/feed" className="flex items-center gap-2">
-            <div className="flex items-center justify-center rounded-xl"
-              style={{ width: 36, height: 36, background: "#FF4D4D" }}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" />
-              </svg>
-            </div>
-            <span className="text-xl font-black text-white tracking-tight">
-              Zip<span style={{ color: "#FF4D4D" }}>Zap</span>
-            </span>
-          </Link>
+      {/* Navbar sinistra desktop */}
+      <div className="zz-nav" style={{ position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 40, width: 220, flexDirection: "column", gap: 6, padding: "32px 20px", background: "rgba(10,10,10,.95)", borderRight: "0.5px solid rgba(255,255,255,.07)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
+          </div>
+          <span style={{ color: "#fff", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
+        </div>
+        {[
+          { label: "Home", href: "/feed" },
+          { label: "Esplora", href: "/explore", active: true },
+          { label: "Zap Store", href: "/store", isStore: true },
+          { label: "Profilo", href: "/profile" },
+        ].map((item) => (
+          <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: item.active ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.8)", fontWeight: 600, fontSize: 14 }}>
+            {item.label}
+          </a>
+        ))}
+        <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 14, marginTop: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M7 1v12M1 7h12" strokeLinecap="round" /></svg>
+          Crea contenuto
+        </a>
+      </div>
+
+      {/* Navbar mobile bottom */}
+      <div className="zz-mob-bot" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 40, alignItems: "center", justifyContent: "space-around", padding: "10px 16px 28px", background: "rgba(0,0,0,.9)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
+        {[
+          { href: "/feed", label: "Home" },
+          { href: "/explore", label: "Esplora", active: true },
+          { href: "/create", label: "Crea", isCreate: true },
+          { href: "/store", label: "Store", isStore: true },
+          { href: "/profile", label: "Profilo" },
+        ].map((item) => (
+          <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
+            {item.isCreate ? (
+              <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
+              </div>
+            ) : item.isStore ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,77,77,.12)", border: "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" /></svg>
+                <span style={{ color: "#FF4D4D", fontSize: 11, fontWeight: 700 }}>Store</span>
+              </div>
+            ) : (
+              <>
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none"
+                  stroke={item.active ? "#fff" : "rgba(255,255,255,.35)"}
+                  strokeWidth={item.active ? "1.8" : "1.6"}>
+                  {item.href === "/feed" && <path d="M2.5 8.5l7.5-5.5 7.5 5.5v9H2.5z" />}
+                  {item.href === "/explore" && <><circle cx="10" cy="10" r="6" /><path d="M14 14l2.5 2.5" strokeLinecap="round" /></>}
+                  {item.href === "/profile" && <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></>}
+                </svg>
+                <span style={{ fontSize: 9, fontWeight: 500, color: item.active ? "#fff" : "rgba(255,255,255,.35)" }}>{item.label}</span>
+              </>
+            )}
+          </a>
+        ))}
+      </div>
+
+      {/* Contenuto */}
+      <div className="zz-content" style={{ maxWidth: 640, margin: "0 auto", padding: "32px 20px 120px" }}>
+
+        {/* Header mobile */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
+          </div>
+          <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -0.5 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
         </div>
 
-        {/* Search bar */}
-        <div className="relative mb-8">
-          <div className="absolute left-4 top-1/2 -translate-y-1/2">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-              stroke="rgba(255,255,255,.3)" strokeWidth="1.5">
-              <circle cx="7" cy="7" r="5" />
-              <path d="M11 11l3 3" strokeLinecap="round" />
+        {/* Search */}
+        <div style={{ position: "relative", marginBottom: 28 }}>
+          <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)" }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5">
+              <circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" strokeLinecap="round" />
             </svg>
           </div>
           <input type="text" placeholder="Cerca creator, prodotti, hashtag..."
-            className="w-full pl-10 pr-4 py-4 rounded-2xl text-white text-sm outline-none"
-            style={{ background: "#1a1a1a", border: "1.5px solid rgba(255,255,255,.08)" }} />
+            style={{ width: "100%", paddingLeft: 44, paddingRight: 16, paddingTop: 14, paddingBottom: 14, borderRadius: 16, background: "#1a1a1a", border: "1.5px solid rgba(255,255,255,.08)", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
         </div>
 
         {/* Trending */}
-        <div className="mb-8">
-          <div className="text-xs font-bold mb-4"
-            style={{ color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".5px" }}>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 14 }}>
             Trending ora
           </div>
-          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {trending.map((t, i) => (
-              <div key={t.tag} className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer"
-                style={{ background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
+              <div key={t.tag} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 14, padding: "12px 16px", cursor: "pointer", background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
                 <div>
-                  <div className="font-bold text-sm text-white">{t.tag}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,.3)" }}>{t.posts} post</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>{t.tag}</div>
+                  <div style={{ fontSize: 11, marginTop: 2, color: "rgba(255,255,255,.3)" }}>{t.posts} post</div>
                 </div>
-                <div className="font-black text-lg" style={{ color: "rgba(255,77,77,.3)" }}>#{i + 1}</div>
+                <div style={{ fontWeight: 900, fontSize: 18, color: "rgba(255,77,77,.3)" }}>#{i + 1}</div>
               </div>
             ))}
           </div>
@@ -75,98 +135,26 @@ export default function Explore() {
 
         {/* Creator suggeriti */}
         <div>
-          <div className="text-xs font-bold mb-4"
-            style={{ color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".5px" }}>
+          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 14 }}>
             Creator suggeriti
           </div>
-          <div className="flex flex-col gap-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {creators.map((c) => (
-              <div key={c.name} className="flex items-center gap-3 rounded-xl px-4 py-3"
-                style={{ background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
-                <div className="rounded-full flex items-center justify-center font-bold text-white flex-shrink-0"
-                  style={{ width: 44, height: 44, background: c.color, fontSize: 14 }}>
+              <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: 16, padding: "12px 16px", background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: c.color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 14, flexShrink: 0 }}>
                   {c.initials}
                 </div>
-                <div className="flex-1">
-                  <div className="font-bold text-white text-sm">@{c.name}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,.35)" }}>{c.cat} · {c.followers} follower</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: "#fff", fontSize: 14 }}>@{c.name}</div>
+                  <div style={{ fontSize: 12, marginTop: 2, color: "rgba(255,255,255,.35)" }}>{c.cat} · {c.followers} follower</div>
                 </div>
-                <button className="px-3 py-1.5 rounded-full text-xs font-bold"
-                  style={{ border: "1.5px solid #FF4D4D", color: "#FF4D4D" }}>
+                <button style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "1.5px solid #FF4D4D", color: "#FF4D4D", background: "transparent", cursor: "pointer" }}>
                   + Segui
                 </button>
               </div>
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Navbar mobile */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around px-4 pb-6 pt-3"
-        style={{ background: "rgba(0,0,0,.9)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
-        {[
-          { href: "/feed", label: "Home", icon: <path d="M2.5 8.5l7.5-5.5 7.5 5.5v9H2.5z" /> },
-          { href: "/explore", label: "Esplora", active: true, icon: <><circle cx="10" cy="10" r="6" /><path d="M14 14l2.5 2.5" strokeLinecap="round" /></> },
-          { href: "/store", label: "Store", isStore: true },
-          { href: "/profile", label: "Profilo", icon: <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></> },
-        ].map((item, i) => (
-          <a key={i} href={item.href} className="flex flex-col items-center gap-1">
-            {item.isStore ? (
-              <div className="flex items-center justify-center rounded-lg px-2 py-1" style={{ background: "#FF4D4D" }}>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" />
-                </svg>
-                <span className="text-white font-black text-xs ml-1">Store</span>
-              </div>
-            ) : (
-              <svg width="22" height="22" viewBox="0 0 20 20" fill="none"
-                stroke={item.active ? "#fff" : "rgba(255,255,255,.35)"} strokeWidth={item.active ? "1.8" : "1.6"}>
-                {item.icon}
-              </svg>
-            )}
-            {!item.isStore && (
-              <span style={{ fontSize: 9, fontWeight: 500, color: item.active ? "#fff" : "rgba(255,255,255,.35)" }}>
-                {item.label}
-              </span>
-            )}
-          </a>
-        ))}
-      </div>
-
-      {/* Navbar desktop sinistra */}
-      <div className="hidden md:flex fixed left-0 top-0 bottom-0 flex-col items-start gap-4 px-6 py-8"
-        style={{ width: 220, background: "rgba(0,0,0,.6)", borderRight: "0.5px solid rgba(255,255,255,.07)" }}>
-        <Link href="/" className="flex items-center gap-2 mb-6">
-          <div className="flex items-center justify-center rounded-xl" style={{ width: 32, height: 32, background: "#FF4D4D" }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" />
-            </svg>
-          </div>
-          <span className="text-xl font-black text-white tracking-tight">Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
-        </Link>
-        {[
-          { href: "/feed", label: "Home", icon: <path d="M2.5 8.5l7.5-5.5 7.5 5.5v9H2.5z" /> },
-          { href: "/explore", label: "Esplora", active: true, icon: <><circle cx="10" cy="10" r="6" /></> },
-          { href: "/store", label: "Zap Store", isStore: true },
-          { href: "/profile", label: "Profilo", icon: <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></> },
-        ].map((item, i) => (
-          <a key={i} href={item.href} className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full"
-            style={{ background: item.active ? "rgba(255,255,255,.1)" : "transparent" }}>
-            {item.isStore ? (
-              <div className="flex items-center justify-center rounded-lg" style={{ width: 24, height: 24, background: "#FF4D4D" }}>
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" />
-                </svg>
-              </div>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
-                stroke="rgba(255,255,255,.7)" strokeWidth="1.6">{item.icon}</svg>
-            )}
-            <span className="text-sm font-semibold" style={{ color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.7)" }}>
-              {item.label}
-            </span>
-          </a>
-        ))}
       </div>
     </div>
   );

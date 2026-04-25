@@ -41,6 +41,33 @@ function formatCount(n: number) {
   return String(n);
 }
 
+function NavDesktop({ active }: { active?: string }) {
+  return (
+    <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.5)", borderRight: "0.5px solid rgba(255,255,255,.06)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
+        </div>
+        <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
+      </div>
+      {[
+        { label: "Home", href: "/feed" },
+        { label: "Esplora", href: "/explore" },
+        { label: "Zap Store", href: "/store", isStore: true },
+        { label: "Profilo", href: "/profile" },
+      ].map(item => (
+        <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: active === item.href ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>
+          {item.label}
+        </a>
+      ))}
+      <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 13, marginTop: 8 }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M7 1v12M1 7h12" strokeLinecap="round" /></svg>
+        Crea contenuto
+      </a>
+    </div>
+  );
+}
+
 export default function Feed() {
   const [feedTab, setFeedTab] = useState<"perTe" | "seguiti">("perTe");
   const [allPosts, setAllPosts] = useState<Post[]>([]);
@@ -98,13 +125,11 @@ export default function Feed() {
           const { data: follows } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
           const ids = (follows || []).map((f: any) => f.following_id);
           setFollowingIds(ids);
-
           const { data } = await supabase
             .from("posts")
             .select("*, profiles(username, full_name, avatar_url)")
             .order("created_at", { ascending: false })
             .limit(30);
-
           if (data && data.length > 0) {
             const filtered = data.filter((p: any) => {
               if (p.visibility === "private") return p.user_id === user.id;
@@ -155,7 +180,6 @@ export default function Feed() {
   useEffect(() => { setCurrent(0); setCarouselIndex(0); }, [feedTab]);
   useEffect(() => { setCarouselIndex(0); }, [current]);
 
-  // Gestione musica nel feed
   useEffect(() => {
     if (musicRef.current) { musicRef.current.pause(); musicRef.current.src = ""; }
     const post = posts[current];
@@ -256,17 +280,7 @@ export default function Feed() {
     return (
       <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
         <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-mobile { display: none !important; } }`}</style>
-        <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.5)", borderRight: "0.5px solid rgba(255,255,255,.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
-            </div>
-            <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
-          </div>
-          {[{ label: "Home", href: "/feed", active: true }, { label: "Esplora", href: "/explore" }, { label: "Zap Store", href: "/store", isStore: true }, { label: "Profilo", href: "/profile" }].map(item => (
-            <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: item.active ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>{item.label}</a>
-          ))}
-        </div>
+        <NavDesktop active="/feed" />
         <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 20, display: "flex", gap: 24 }}>
           <span onClick={() => setFeedTab("perTe")} style={{ color: "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, cursor: "pointer", paddingBottom: 4 }}>Per te</span>
           <span style={{ color: "#fff", fontWeight: 600, fontSize: 14, borderBottom: "2px solid #fff", paddingBottom: 4 }}>Seguiti</span>
@@ -301,10 +315,8 @@ export default function Feed() {
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
       <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-mobile { display: none !important; } }`}</style>
 
-      {/* Sfondo */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
 
-      {/* Media */}
       {currentMedia && (
         <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
           {post.postType === "video" ? (
@@ -318,10 +330,8 @@ export default function Feed() {
         </div>
       )}
 
-      {/* Overlay gradiente */}
       <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
 
-      {/* Overlay text */}
       {post.overlayText && (
         <div style={{
           position: "absolute", zIndex: 15, left: 16, right: 70,
@@ -336,7 +346,6 @@ export default function Feed() {
         </div>
       )}
 
-      {/* Indicatori carosello */}
       {isCarousel && (
         <div style={{ position: "absolute", top: 100, left: "50%", transform: "translateX(-50%)", zIndex: 15, display: "flex", gap: 6 }}>
           {allMedia.map((_, i) => (
@@ -346,7 +355,6 @@ export default function Feed() {
         </div>
       )}
 
-      {/* Frecce carosello */}
       {isCarousel && carouselIndex > 0 && (
         <button onClick={() => setCarouselIndex(c => c - 1)}
           style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.5)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -360,18 +368,7 @@ export default function Feed() {
         </button>
       )}
 
-      {/* Navbar sinistra desktop */}
-      <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.5)", borderRight: "0.5px solid rgba(255,255,255,.06)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
-          </div>
-          <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
-        </div>
-        {[{ label: "Home", href: "/feed", active: true }, { label: "Esplora", href: "/explore" }, { label: "Zap Store", href: "/store", isStore: true }, { label: "Profilo", href: "/profile" }].map(item => (
-          <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: item.active ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>{item.label}</a>
-        ))}
-      </div>
+      <NavDesktop active="/feed" />
 
       {/* Topbar mobile */}
       <div className="zz-mobile" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "44px 16px 12px" }}>
@@ -416,11 +413,7 @@ export default function Feed() {
               <span style={{ color: "rgba(255,255,255,.7)", fontSize: 12 }}>{post.musicTitle} — {post.musicArtist}</span>
             </div>
           )}
-          {isCarousel && (
-            <span style={{ color: "rgba(255,255,255,.5)", fontSize: 11 }}>📷 {allMedia.length} foto</span>
-          )}
-
-          {/* Link affiliato — apre nel browser */}
+          {isCarousel && <span style={{ color: "rgba(255,255,255,.5)", fontSize: 11 }}>📷 {allMedia.length} foto</span>}
           {post.hasLink && post.linkName && (
             <a href={post.linkName.startsWith("http") ? post.linkName : `https://${post.linkName}`}
               target="_blank" rel="noopener noreferrer"
@@ -443,7 +436,6 @@ export default function Feed() {
 
       {/* Azioni destra */}
       <div style={{ position: "absolute", right: 12, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid rgba(255,255,255,.8)", background: post.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>
             {post.initials}
@@ -489,7 +481,6 @@ export default function Feed() {
           <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>Condividi</span>
         </button>
 
-        {/* Audio */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <button onClick={handleUnmute} style={{ width: 48, height: 48, borderRadius: "50%", background: muted ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.15)", border: muted ? "1.5px solid rgba(255,77,77,.5)" : "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             {muted ? (
@@ -526,7 +517,7 @@ export default function Feed() {
       </div>
 
       {/* Frecce navigazione */}
-      <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ position: "absolute", left: 216, top: "50%", transform: "translateY(-50%)", zIndex: 20, display: "flex", flexDirection: "column", gap: 8 }}>
         <button onClick={() => { setCurrent(c => Math.max(0, c - 1)); setCarouselIndex(0); }}
           style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.15)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="1.8"><path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
