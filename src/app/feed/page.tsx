@@ -56,7 +56,7 @@ function NavDesktop({ active }: { active?: string }) {
         { label: "Zap Store", href: "/store", isStore: true },
         { label: "Profilo", href: "/profile" },
       ].map(item => (
-        <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: active === item.href ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>
+        <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: active === item.href ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: (item as any).isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>
           {item.label}
         </a>
       ))}
@@ -120,6 +120,10 @@ export default function Feed() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
+
+        // Leggi postId dall'URL per navigare al post giusto
+        const targetPostId = new URLSearchParams(window.location.search).get("postId");
+
         if (user) {
           setCurrentUserId(user.id);
           const { data: follows } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
@@ -129,14 +133,23 @@ export default function Feed() {
             .from("posts")
             .select("*, profiles(username, full_name, avatar_url)")
             .order("created_at", { ascending: false })
-            .limit(30);
+            .limit(50);
           if (data && data.length > 0) {
             const filtered = data.filter((p: any) => {
               if (p.visibility === "private") return p.user_id === user.id;
               if (p.visibility === "friends") return ids.includes(p.user_id) || p.user_id === user.id;
               return true;
             });
-            setAllPosts(filtered.map(mapPost));
+            const mapped = filtered.map(mapPost);
+            setAllPosts(mapped);
+
+            // Naviga al post giusto se arrivato dal profilo
+            if (targetPostId) {
+              const idx = mapped.findIndex(p => p.id === targetPostId);
+              if (idx > -1) setCurrent(idx);
+              // Pulisci URL senza ricaricare la pagina
+              window.history.replaceState({}, "", "/feed");
+            }
           } else {
             setAllPosts(mockPosts);
           }
@@ -147,7 +160,13 @@ export default function Feed() {
             .eq("visibility", "public")
             .order("created_at", { ascending: false })
             .limit(20);
-          setAllPosts(data && data.length > 0 ? data.map(mapPost) : mockPosts);
+          const mapped = data && data.length > 0 ? data.map(mapPost) : mockPosts;
+          setAllPosts(mapped);
+          if (targetPostId) {
+            const idx = mapped.findIndex(p => p.id === targetPostId);
+            if (idx > -1) setCurrent(idx);
+            window.history.replaceState({}, "", "/feed");
+          }
         }
       } catch { setAllPosts(mockPosts); }
       setLoadingPosts(false);
@@ -532,23 +551,23 @@ export default function Feed() {
       <div className="zz-mobile" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, display: "flex", alignItems: "center", justifyContent: "space-around", padding: "10px 16px 28px", background: "rgba(0,0,0,.88)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
         {[{ href: "/feed", label: "Home", active: true }, { href: "/explore", label: "Esplora" }, { href: "/create", label: "Crea", isCreate: true }, { href: "/store", label: "Store", isStore: true }, { href: "/profile", label: "Profilo" }].map(item => (
           <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
-            {item.isCreate ? (
+            {(item as any).isCreate ? (
               <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
               </div>
-            ) : item.isStore ? (
+            ) : (item as any).isStore ? (
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,77,77,.12)", border: "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" /></svg>
                 <span style={{ color: "#FF4D4D", fontSize: 11, fontWeight: 700 }}>Store</span>
               </div>
             ) : (
               <>
-                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke={item.active ? "#fff" : "rgba(255,255,255,.35)"} strokeWidth={item.active ? "1.8" : "1.6"}>
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke={(item as any).active ? "#fff" : "rgba(255,255,255,.35)"} strokeWidth={(item as any).active ? "1.8" : "1.6"}>
                   {item.href === "/feed" && <path d="M2.5 8.5l7.5-5.5 7.5 5.5v9H2.5z" />}
                   {item.href === "/explore" && <><circle cx="10" cy="10" r="6" /><path d="M14 14l2.5 2.5" strokeLinecap="round" /></>}
                   {item.href === "/profile" && <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></>}
                 </svg>
-                <span style={{ fontSize: 9, fontWeight: 500, color: item.active ? "#fff" : "rgba(255,255,255,.35)" }}>{item.label}</span>
+                <span style={{ fontSize: 9, fontWeight: 500, color: (item as any).active ? "#fff" : "rgba(255,255,255,.35)" }}>{item.label}</span>
               </>
             )}
           </a>
