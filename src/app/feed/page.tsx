@@ -50,7 +50,7 @@ export default function Feed() {
   const [current, setCurrent] = useState(0);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [showVolume, setShowVolume] = useState(false);
   const [liked, setLiked] = useState(false);
@@ -158,18 +158,18 @@ export default function Feed() {
   useEffect(() => { setCarouselIndex(0); }, [current]);
 
   // Gestione musica nel feed
-  useEffect(() => {
-    if (musicRef.current) { musicRef.current.pause(); musicRef.current.src = ""; }
-    const post = posts[current];
-    if (post?.musicUrl && !muted) {
-      const audio = new Audio(post.musicUrl);
-      audio.volume = volume;
-      audio.loop = true;
-      audio.play().catch(() => {});
-      musicRef.current = audio;
-    }
-    return () => { if (musicRef.current) { musicRef.current.pause(); } };
-  }, [current, posts, muted]);
+useEffect(() => {
+  if (musicRef.current) { musicRef.current.pause(); musicRef.current.src = ""; }
+  const post = posts[current];
+  if (post?.musicUrl) {
+    const audio = new Audio(post.musicUrl);
+    audio.volume = volume;
+    audio.loop = true;
+    if (!muted) audio.play().catch(() => {});
+    musicRef.current = audio;
+  }
+  return () => { if (musicRef.current) { musicRef.current.pause(); } };
+}, [current, posts]);
 
   useEffect(() => {
     if (musicRef.current) { musicRef.current.volume = volume; }
