@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -60,7 +60,9 @@ function TextOverlayEditor({
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number } | null>(null);
   const elementsRef = useRef(elements);
+  const setElementsRef = useRef(setElements);
   elementsRef.current = elements;
+  setElementsRef.current = setElements;
 
   const selectedEl = elements.find(e => e.id === selected);
 
@@ -70,22 +72,24 @@ function TextOverlayEditor({
       x: 30, y: 40, font: "sans", size: 20, color: "#ffffff",
       bold: false, italic: false, align: "center", bg: true, link: "",
     };
-    setElements([...elements, newEl]);
+    setElementsRef.current([...elementsRef.current, newEl]);
     setSelected(newEl.id);
     setEditing(true);
   }
 
   function updateEl(id: string, changes: Partial<TextElement>) {
-    setElements(elementsRef.current.map(e => e.id === id ? { ...e, ...changes } : e));
+    setElementsRef.current(elementsRef.current.map(e => e.id === id ? { ...e, ...changes } : e));
   }
 
   function deleteEl(id: string) {
-    setElements(elementsRef.current.filter(e => e.id !== id));
+    setElementsRef.current(elementsRef.current.filter(e => e.id !== id));
     setSelected(null);
   }
 
+  // Mouse drag
   function onMouseDown(e: React.MouseEvent, id: string) {
     e.stopPropagation();
+    e.preventDefault();
     setSelected(id);
     const el = elementsRef.current.find(el => el.id === id);
     if (!el) return;
@@ -98,7 +102,7 @@ function TextOverlayEditor({
       const dy = ((ev.clientY - dragRef.current.startY) / rect.height) * 100;
       const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElements(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+      setElementsRef.current(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
 
     function onMouseUp() {
@@ -111,6 +115,7 @@ function TextOverlayEditor({
     window.addEventListener("mouseup", onMouseUp);
   }
 
+  // Touch drag — previene scroll pagina
   function onTouchStart(e: React.TouchEvent, id: string) {
     e.stopPropagation();
     setSelected(id);
@@ -120,6 +125,7 @@ function TextOverlayEditor({
     dragRef.current = { id, startX: touch.clientX, startY: touch.clientY, elemX: el.x, elemY: el.y };
 
     function onTouchMove(ev: TouchEvent) {
+      ev.preventDefault(); // blocca scroll durante drag
       if (!dragRef.current || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const t = ev.touches[0];
@@ -127,7 +133,7 @@ function TextOverlayEditor({
       const dy = ((t.clientY - dragRef.current.startY) / rect.height) * 100;
       const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
       const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElements(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+      setElementsRef.current(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
     }
 
     function onTouchEnd() {
@@ -136,7 +142,8 @@ function TextOverlayEditor({
       window.removeEventListener("touchend", onTouchEnd);
     }
 
-    window.addEventListener("touchmove", onTouchMove);
+    // passive: false per poter chiamare preventDefault
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onTouchEnd);
   }
 
@@ -148,8 +155,9 @@ function TextOverlayEditor({
         <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Fatto</button>
       </div>
 
-      <div ref={canvasRef} onClick={() => setSelected(null)}
-        style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div ref={canvasRef} onClick={(e) => { if (dragRef.current) return; setSelected(null); }}
+        style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}>
+
         {mediaPreview && mediaType === "video" && (
           <video src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />
         )}
@@ -169,7 +177,7 @@ function TextOverlayEditor({
               onMouseDown={(e) => onMouseDown(e, el.id)}
               onTouchStart={(e) => onTouchStart(e, el.id)}
               onDoubleClick={(e) => { e.stopPropagation(); setSelected(el.id); setEditing(true); }}
-              style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, cursor: "move", userSelect: "none", outline: selected === el.id ? "2px solid #FF4D4D" : "none", borderRadius: 6, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", maxWidth: "70%" }}>
+              style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, cursor: "move", userSelect: "none", touchAction: "none", outline: selected === el.id ? "2px solid #FF4D4D" : "none", borderRadius: 6, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", maxWidth: "70%", zIndex: 10 }}>
               {editing && selected === el.id ? (
                 <input autoFocus value={el.text}
                   onChange={e => updateEl(el.id, { text: e.target.value })}
@@ -187,7 +195,7 @@ function TextOverlayEditor({
         })}
 
         <button onClick={(e) => { e.stopPropagation(); addText(); }}
-          style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", padding: "10px 20px", borderRadius: 20, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+          style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", padding: "10px 20px", borderRadius: 20, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", zIndex: 20 }}>
           + Aggiungi testo
         </button>
       </div>
@@ -345,10 +353,7 @@ export default function EditPost() {
     progressInterval.current = setInterval(() => {
       if (audio.duration) setTrackProgress(p => ({ ...p, [track.id]: (audio.currentTime / audio.duration) * 100 }));
     }, 200);
-    audio.onended = () => {
-      setPlayingId(null);
-      if (progressInterval.current) clearInterval(progressInterval.current);
-    };
+    audio.onended = () => { setPlayingId(null); if (progressInterval.current) clearInterval(progressInterval.current); };
   }
 
   function selectTrack(track: typeof libraryTracks[0]) {
@@ -390,7 +395,7 @@ export default function EditPost() {
       }
     }
 
-    await supabase.from("posts").update({
+    const { error } = await supabase.from("posts").update({
       caption,
       link_url: linkUrl || null,
       visibility,
@@ -402,8 +407,15 @@ export default function EditPost() {
       overlay_data: textElements.length > 0 ? textElements : null,
     }).eq("id", postId);
 
+    if (error) {
+      alert("Errore nel salvataggio: " + error.message);
+      setSaving(false);
+      return;
+    }
+
     setSaving(false);
     setSaved(true);
+    // Torna al profilo dopo 1.5s — il feed ricarica i post dal DB quindi sarà aggiornato
     setTimeout(() => router.push("/profile"), 1500);
   }
 
@@ -426,6 +438,7 @@ export default function EditPost() {
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#4dffb8" strokeWidth="2.5"><path d="M5 14l6 6L23 8" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </div>
         <p style={{ color: "#fff", fontWeight: 900, fontSize: 20 }}>Modifiche salvate! ⚡</p>
+        <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Aggiornato su feed e profilo</p>
       </div>
     );
   }
@@ -447,7 +460,6 @@ export default function EditPost() {
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: "linear-gradient(135deg, #0d0000 0%, #000 60%)" }}>
       <style>{`body { margin: 0; }`}</style>
 
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "48px 20px 16px", flexShrink: 0 }}>
         <button onClick={() => router.back()}
           style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.08)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -482,7 +494,6 @@ export default function EditPost() {
           </div>
         )}
 
-        {/* Editor testo per post testuali */}
         {!mediaUrl && (
           <button onClick={() => setShowTextEditor(true)}
             style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", cursor: "pointer", marginBottom: 16 }}>
