@@ -280,10 +280,9 @@ export default function Create() {
                   <div style={{
                     position: "absolute",
                     left: 12, right: 12,
-                    top: overlayPosition === "top" ? 12 : "auto",
-                    bottom: overlayPosition === "bottom" ? 12 : "auto",
-                    top: overlayPosition === "center" ? "50%" : undefined,
-                    transform: overlayPosition === "center" ? "translateY(-50%)" : undefined,
+                    top: overlayPosition === "top" ? 12 : overlayPosition === "center" ? "50%" : "auto",
+bottom: overlayPosition === "bottom" ? 12 : "auto",
+transform: overlayPosition === "center" ? "translateY(-50%)" : undefined,
                     background: "rgba(0,0,0,.55)", borderRadius: 8, padding: "6px 10px",
                     color: "#fff", fontWeight: 700, fontSize: 15, textAlign: "center",
                   }}>{overlayText}</div>
