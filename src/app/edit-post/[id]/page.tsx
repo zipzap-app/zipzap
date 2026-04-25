@@ -86,7 +86,6 @@ function TextOverlayEditor({
     setSelected(null);
   }
 
-  // Mouse drag
   function onMouseDown(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     e.preventDefault();
@@ -115,7 +114,6 @@ function TextOverlayEditor({
     window.addEventListener("mouseup", onMouseUp);
   }
 
-  // Touch drag — previene scroll pagina
   function onTouchStart(e: React.TouchEvent, id: string) {
     e.stopPropagation();
     setSelected(id);
@@ -125,7 +123,7 @@ function TextOverlayEditor({
     dragRef.current = { id, startX: touch.clientX, startY: touch.clientY, elemX: el.x, elemY: el.y };
 
     function onTouchMove(ev: TouchEvent) {
-      ev.preventDefault(); // blocca scroll durante drag
+      ev.preventDefault();
       if (!dragRef.current || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const t = ev.touches[0];
@@ -142,7 +140,6 @@ function TextOverlayEditor({
       window.removeEventListener("touchend", onTouchEnd);
     }
 
-    // passive: false per poter chiamare preventDefault
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onTouchEnd);
   }
@@ -318,7 +315,7 @@ export default function EditPost() {
     async function loadPost() {
       const supabase = createClient();
       const { data } = await supabase.from("posts").select("*").eq("id", postId).single();
-      if (!data) { router.push("/profile"); return; }
+      if (!data) { window.location.href = "/profile"; return; }
       setCaption(data.caption || "");
       setLinkUrl(data.link_url || "");
       setVisibility(data.visibility || "public");
@@ -377,7 +374,7 @@ export default function EditPost() {
     stopPreview();
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    if (!user) { window.location.href = "/login"; return; }
 
     let musicUrl = selectedTrack?.url || null;
     let musicTitle = selectedTrack?.title || null;
@@ -415,8 +412,8 @@ export default function EditPost() {
 
     setSaving(false);
     setSaved(true);
-    // Torna al profilo dopo 1.5s — il feed ricarica i post dal DB quindi sarà aggiornato
-    setTimeout(() => router.push("/profile"), 1500);
+    // window.location.href forza reload completo — feed e profilo ricaricano dal DB
+    setTimeout(() => { window.location.href = "/profile"; }, 1500);
   }
 
   if (showTextEditor) {
@@ -461,7 +458,7 @@ export default function EditPost() {
       <style>{`body { margin: 0; }`}</style>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "48px 20px 16px", flexShrink: 0 }}>
-        <button onClick={() => router.back()}
+        <button onClick={() => window.location.href = "/profile"}
           style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.08)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5"><path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
@@ -471,7 +468,6 @@ export default function EditPost() {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 100px" }}>
 
-        {/* Anteprima media */}
         {mediaUrl && (
           <div style={{ marginBottom: 20, borderRadius: 16, overflow: "hidden", height: 200, position: "relative", background: "#000" }}>
             {postType === "video"
@@ -509,7 +505,6 @@ export default function EditPost() {
           </button>
         )}
 
-        {/* Descrizione */}
         <div style={{ marginBottom: 16 }}>
           <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Descrizione</label>
           <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 300))} rows={4}
@@ -517,7 +512,6 @@ export default function EditPost() {
           <div style={{ textAlign: "right", fontSize: 10, color: "rgba(255,255,255,.2)", marginTop: 4 }}>{caption.length}/300</div>
         </div>
 
-        {/* Musica */}
         <div style={{ marginBottom: 16, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,.08)" }}>
           <button onClick={() => setShowMusic(!showMusic)}
             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "rgba(255,255,255,.04)", border: "none", cursor: "pointer" }}>
@@ -608,7 +602,6 @@ export default function EditPost() {
           )}
         </div>
 
-        {/* Visibilità */}
         <div style={{ marginBottom: 16, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,.08)" }}>
           <div style={{ padding: "10px 16px", background: "rgba(255,255,255,.04)" }}>
             <span style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }}>Visibilità</span>
@@ -632,7 +625,6 @@ export default function EditPost() {
           ))}
         </div>
 
-        {/* Link affiliato */}
         <div style={{ marginBottom: 24, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,77,77,.2)" }}>
           <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,77,77,.07)" }}>
             <span style={{ color: "#FF4D4D", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }}>Link affiliato</span>
