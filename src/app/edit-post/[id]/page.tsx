@@ -70,14 +70,75 @@ function TextOverlayEditor({
   const [videoDurationMs, setVideoDurationMs] = useState(0);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [centerSnap, setCenterSnap] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const canvasRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRef = useRef<HTMLVideoElement | HTMLImageElement | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number } | null>(null);
   const tlDragRef = useRef<{ mode: "left" | "right" | "move"; startX: number; origStartMs: number; origEndMs: number; trackW: number } | null>(null);
 
   const isVideo = mediaType === "video";
   const selectedEl = elements.find(e => e.id === selected) || null;
+
+  // Geometria: bounding del media (video/img) rispetto al canvas, in percentuali
+  function getMediaBounds() {
+    if (!mediaRef.current || !canvasRef.current) return null;
+    const m = mediaRef.current.getBoundingClientRect();
+    const c = canvasRef.current.getBoundingClientRect();
+    if (m.width === 0 || m.height === 0 || c.width === 0) return null;
+    return {
+      leftPct: ((m.left - c.left) / c.width) * 100,
+      topPct: ((m.top - c.top) / c.height) * 100,
+      widthPct: (m.width / c.width) * 100,
+      heightPct: (m.height / c.height) * 100,
+      canvasW: c.width,
+      canvasH: c.height,
+    };
+  }
+
+  function clampToMedia(x: number, y: number, textPx?: { w: number; h: number }) {
+    const b = getMediaBounds();
+    if (!b) return { x, y };
+    const tWpct = textPx ? (textPx.w / b.canvasW) * 100 : 0;
+    const tHpct = textPx ? (textPx.h / b.canvasH) * 100 : 0;
+    const minX = b.leftPct;
+    const minY = b.topPct;
+    const maxX = b.leftPct + b.widthPct - tWpct;
+    const maxY = b.topPct + b.heightPct - tHpct;
+    return {
+      x: Math.max(minX, Math.min(maxX, x)),
+      y: Math.max(minY, Math.min(maxY, y)),
+    };
+  }
+
+  function snapToCenter(x: number, y: number, textPx: { w: number; h: number }) {
+    const b = getMediaBounds();
+    if (!b) return { x, y, snapX: false, snapY: false };
+    const tol = 2;
+    const tWpct = (textPx.w / b.canvasW) * 100;
+    const tHpct = (textPx.h / b.canvasH) * 100;
+    const tCenterX = x + tWpct / 2;
+    const tCenterY = y + tHpct / 2;
+    const mCenterX = b.leftPct + b.widthPct / 2;
+    const mCenterY = b.topPct + b.heightPct / 2;
+    let snapX = false, snapY = false;
+    if (Math.abs(tCenterX - mCenterX) < tol) {
+      x = mCenterX - tWpct / 2;
+      snapX = true;
+    }
+    if (Math.abs(tCenterY - mCenterY) < tol) {
+      y = mCenterY - tHpct / 2;
+      snapY = true;
+    }
+    return { x, y, snapX, snapY };
+  }
+
+  function getTextPx(id: string) {
+    const el = document.getElementById(`zz-text-${id}`);
+    if (!el) return { w: 80, h: 30 };
+    return { w: el.offsetWidth, h: el.offsetHeight };
+  }
 
   // Normalizza i testi: se c'è un video e mancano startMs/endMs, riempi con i default
   useEffect(() => {
@@ -98,10 +159,17 @@ function TextOverlayEditor({
   }, [isVideo, videoDurationMs]);
 
   function addText() {
+    const b = getMediaBounds();
+    let defaultX = 30;
+    let defaultY = 40;
+    if (b) {
+      defaultX = b.leftPct + b.widthPct / 2 - 5;
+      defaultY = b.topPct + b.heightPct / 2 - 2;
+    }
     const newEl: TextElement = {
       id: Date.now().toString(),
       text: "Testo",
-      x: 30, y: 40,
+      x: defaultX, y: defaultY,
       font: "sans",
       size: 22,
       color: "#ffffff",
@@ -131,7 +199,14 @@ function TextOverlayEditor({
     setSelected(id);
     const el = elements.find(el => el.id === id);
     if (!el) return;
-    dragRef.current = { id, startX: clientX, startY: clientY, elemX: el.x, elemY: el.y };
+    const textPx = getTextPx(id);
+    const clamped = clampToMedia(el.x, el.y, textPx);
+    if (clamped.x !== el.x || clamped.y !== el.y) {
+      setElements(elements.map(e => e.id === id ? { ...e, x: clamped.x, y: clamped.y } : e));
+      dragRef.current = { id, startX: clientX, startY: clientY, elemX: clamped.x, elemY: clamped.y };
+    } else {
+      dragRef.current = { id, startX: clientX, startY: clientY, elemX: el.x, elemY: el.y };
+    }
   }
 
   useEffect(() => {
@@ -146,12 +221,23 @@ function TextOverlayEditor({
       const { x, y } = getXY(e);
       const dx = ((x - dragRef.current.startX) / rect.width) * 100;
       const dy = ((y - dragRef.current.startY) / rect.height) * 100;
-      const newX = Math.max(0, Math.min(95, dragRef.current.elemX + dx));
-      const newY = Math.max(0, Math.min(95, dragRef.current.elemY + dy));
+      let newX = dragRef.current.elemX + dx;
+      let newY = dragRef.current.elemY + dy;
       const id = dragRef.current.id;
+      const textPx = getTextPx(id);
+      const snap = snapToCenter(newX, newY, textPx);
+      newX = snap.x;
+      newY = snap.y;
+      setCenterSnap({ x: snap.snapX, y: snap.snapY });
+      const clamped = clampToMedia(newX, newY, textPx);
+      newX = clamped.x;
+      newY = clamped.y;
       setElements(elements.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
     }
-    function onUp() { dragRef.current = null; }
+    function onUp() {
+      dragRef.current = null;
+      setCenterSnap({ x: false, y: false });
+    }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onMove, { passive: false });
@@ -278,7 +364,7 @@ function TextOverlayEditor({
         {/* Media di sfondo */}
         {mediaPreview && isVideo && (
           <video
-            ref={videoRef}
+            ref={(el) => { videoRef.current = el; mediaRef.current = el; }}
             src={mediaPreview}
             style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
             muted loop playsInline
@@ -289,7 +375,12 @@ function TextOverlayEditor({
           />
         )}
         {mediaPreview && mediaType === "photo" && (
-          <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} alt="" />
+          <img
+            ref={(el) => { mediaRef.current = el; }}
+            src={mediaPreview}
+            style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
+            alt=""
+          />
         )}
         {(!mediaPreview || mediaType === "text") && (
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0030, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -306,6 +397,7 @@ function TextOverlayEditor({
           return (
             <div
               key={el.id}
+              id={`zz-text-${el.id}`}
               onMouseDown={(e) => { e.stopPropagation(); startDrag(e.clientX, e.clientY, el.id); }}
               onTouchStart={(e) => { e.stopPropagation(); const t = e.touches[0]; startDrag(t.clientX, t.clientY, el.id); }}
               onDoubleClick={(e) => { e.stopPropagation(); setSelected(el.id); setEditing(true); }}
@@ -427,6 +519,42 @@ function TextOverlayEditor({
             </div>
           </div>
         )}
+
+        {/* Linee guida del centro (visibili solo durante lo snap) */}
+        {(centerSnap.x || centerSnap.y) && (() => {
+          const b = getMediaBounds();
+          if (!b) return null;
+          return (
+            <>
+              {centerSnap.x && (
+                <div style={{
+                  position: "absolute",
+                  left: `${b.leftPct + b.widthPct / 2}%`,
+                  top: `${b.topPct}%`,
+                  height: `${b.heightPct}%`,
+                  width: 0,
+                  borderLeft: "1px dashed #FF4D4D",
+                  pointerEvents: "none",
+                  zIndex: 30,
+                  boxShadow: "0 0 4px rgba(255,77,77,.6)",
+                }} />
+              )}
+              {centerSnap.y && (
+                <div style={{
+                  position: "absolute",
+                  top: `${b.topPct + b.heightPct / 2}%`,
+                  left: `${b.leftPct}%`,
+                  width: `${b.widthPct}%`,
+                  height: 0,
+                  borderTop: "1px dashed #FF4D4D",
+                  pointerEvents: "none",
+                  zIndex: 30,
+                  boxShadow: "0 0 4px rgba(255,77,77,.6)",
+                }} />
+              )}
+            </>
+          );
+        })()}
 
         {/* Bottone aggiungi testo */}
         <button onClick={(e) => { e.stopPropagation(); addText(); }}
