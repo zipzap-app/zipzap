@@ -108,6 +108,7 @@ export default function Feed() {
   const [isPaused, setIsPaused] = useState(false);
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number>(9 / 16);
   const videoRef = useRef<HTMLVideoElement>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
   const postsRef = useRef<Post[]>([]);
@@ -232,7 +233,7 @@ export default function Feed() {
   }, [feedTab, followingIds]);
 
   useEffect(() => { setCurrent(0); setCarouselIndex(0); }, [feedTab]);
-  useEffect(() => { setCarouselIndex(0); setProgress(0); setDuration(0); setIsPaused(false); }, [current]);
+  useEffect(() => { setCarouselIndex(0); setProgress(0); setDuration(0); setIsPaused(false); setAspectRatio(9 / 16); }, [current]);
 
   // Drag globale per il seek della progress bar
   useEffect(() => {
@@ -268,6 +269,15 @@ export default function Feed() {
   function handleLoadedMetadata() {
     if (!videoRef.current) return;
     setDuration(videoRef.current.duration || 0);
+    if (videoRef.current.videoWidth && videoRef.current.videoHeight) {
+      setAspectRatio(videoRef.current.videoWidth / videoRef.current.videoHeight);
+    }
+  }
+  function handleImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      setAspectRatio(img.naturalWidth / img.naturalHeight);
+    }
   }
   function handleSeekStart(e: React.MouseEvent | React.TouchEvent) {
     e.stopPropagation();
@@ -439,7 +449,10 @@ export default function Feed() {
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
       <style>{`
         .zz-desktop { display: none; }
-        @media (max-width: 768px) { .zz-desktop { display: none !important; } }
+        @media (max-width: 768px) {
+          .zz-desktop { display: none !important; }
+          .zz-stage { width: 100% !important; height: 100% !important; aspect-ratio: auto !important; max-width: none !important; max-height: none !important; }
+        }
         @media (min-width: 769px) {
           .zz-desktop { display: flex !important; }
           .zz-mobile { display: none !important; }
@@ -459,78 +472,87 @@ export default function Feed() {
 
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
 
-      {/* Area video */}
+      {/* Area video con stage ad aspect ratio dinamico */}
       <div className="zz-video-area" style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
-        {currentMedia && (
-          <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {post.postType === "video" ? (
-              <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
-                onClick={handleMediaClick}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleLoadedMetadata}
-                style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain", cursor: "pointer" }}
-                autoPlay loop playsInline muted={muted} />
-            ) : (
-              <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
-                onClick={handleMediaClick}
-                style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain", cursor: "pointer" }} />
-            )}
-            {isCarousel && carouselIndex > 0 && (
-              <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c - 1); }}
-                style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 2L4 7l5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-            )}
-            {isCarousel && carouselIndex < allMedia.length - 1 && (
-              <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c + 1); }}
-                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-            )}
-            {/* Cuore animato del doppio click */}
-            {showHeartBurst && (
-              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 18, pointerEvents: "none", animation: "zz-heart-burst 800ms ease-out forwards" }}>
-                <svg width="120" height="120" viewBox="0 0 20 20" fill="#FF4D4D" stroke="#fff" strokeWidth="0.6" style={{ filter: "drop-shadow(0 4px 16px rgba(255,77,77,.6))" }}>
-                  <path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" />
-                </svg>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
-
-      {/* Overlay testo */}
-      {post.overlayData && post.overlayData.length > 0 ? (
-        post.overlayData
-          .filter((el: any) => {
-            if (post.postType !== "video") return true;
-            const curMs = progress * (duration || 0) * 1000;
-            const start = typeof el.startMs === "number" ? el.startMs : 0;
-            const end = typeof el.endMs === "number" ? el.endMs : Infinity;
-            return curMs >= start && curMs <= end;
-          })
-          .map((el: any) => (
-          <div key={el.id} style={{ position: "absolute", zIndex: 15, left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
-            <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
-          </div>
-        ))
-      ) : post.overlayText ? (
-        <div style={{ position: "absolute", zIndex: 15, left: 16, right: 80, top: post.overlayPosition === "top" ? 100 : post.overlayPosition === "center" ? "50%" : "auto", bottom: post.overlayPosition === "bottom" ? 160 : "auto", transform: post.overlayPosition === "center" ? "translateY(-50%)" : undefined, background: "rgba(0,0,0,.6)", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center", pointerEvents: "none" }}>
-          {post.overlayText}
-        </div>
-      ) : null}
-
-      {/* Indicatori carosello */}
-      {isCarousel && (
-        <div style={{ position: "absolute", top: 80, left: "50%", transform: "translateX(-50%)", zIndex: 15, display: "flex", gap: 6 }}>
-          {allMedia.map((_, i) => (
-            <div key={i} onClick={() => setCarouselIndex(i)}
-              style={{ width: i === carouselIndex ? 20 : 6, height: 6, borderRadius: 3, background: i === carouselIndex ? "#fff" : "rgba(255,255,255,.4)", cursor: "pointer", transition: "all .2s" }} />
+        <div className="zz-stage" style={{ position: "relative", height: "100%", aspectRatio: String(aspectRatio), maxWidth: "100%", maxHeight: "100%", overflow: "hidden", background: "#000" }}>
+          {currentMedia && (post.postType === "video" ? (
+            <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
+              onClick={handleMediaClick}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer", display: "block" }}
+              autoPlay loop playsInline muted={muted} />
+          ) : (
+            <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
+              onClick={handleMediaClick}
+              onLoad={handleImageLoad}
+              style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer", display: "block" }} />
           ))}
+
+          {/* Overlay scuro per leggibilità testi */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.25) 100%)", pointerEvents: "none" }} />
+
+          {/* Frecce carosello */}
+          {isCarousel && carouselIndex > 0 && (
+            <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c - 1); }}
+              style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", zIndex: 16, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 2L4 7l5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
+          {isCarousel && carouselIndex < allMedia.length - 1 && (
+            <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c + 1); }}
+              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", zIndex: 16, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
+
+          {/* Indicatori carosello (centrati sullo stage) */}
+          {isCarousel && (
+            <div style={{ position: "absolute", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 16, display: "flex", gap: 6 }}>
+              {allMedia.map((_, i) => (
+                <div key={i} onClick={() => setCarouselIndex(i)}
+                  style={{ width: i === carouselIndex ? 20 : 6, height: 6, borderRadius: 3, background: i === carouselIndex ? "#fff" : "rgba(255,255,255,.4)", cursor: "pointer", transition: "all .2s" }} />
+              ))}
+            </div>
+          )}
+
+          {/* Tab Per te / Seguiti — desktop, centrati sullo stage */}
+          <div className="zz-desktop" style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 16, gap: 24 }}>
+            <span onClick={() => setFeedTab("perTe")} style={{ color: feedTab === "perTe" ? "#fff" : "rgba(255,255,255,.55)", fontWeight: 600, fontSize: 14, borderBottom: feedTab === "perTe" ? "2px solid #fff" : "2px solid transparent", paddingBottom: 4, cursor: "pointer", textShadow: "0 1px 4px rgba(0,0,0,.6)" }}>Per te</span>
+            <span onClick={() => setFeedTab("seguiti")} style={{ color: feedTab === "seguiti" ? "#fff" : "rgba(255,255,255,.55)", fontWeight: 600, fontSize: 14, borderBottom: feedTab === "seguiti" ? "2px solid #fff" : "2px solid transparent", paddingBottom: 4, cursor: "pointer", textShadow: "0 1px 4px rgba(0,0,0,.6)" }}>Seguiti</span>
+          </div>
+
+          {/* Overlay testi (coordinate relative allo stage = relative al video) */}
+          {post.overlayData && post.overlayData.length > 0 ? (
+            post.overlayData
+              .filter((el: any) => {
+                if (post.postType !== "video") return true;
+                const curMs = progress * (duration || 0) * 1000;
+                const start = typeof el.startMs === "number" ? el.startMs : 0;
+                const end = typeof el.endMs === "number" ? el.endMs : Infinity;
+                return curMs >= start && curMs <= end;
+              })
+              .map((el: any) => (
+              <div key={el.id} style={{ position: "absolute", zIndex: 17, left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
+                <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
+              </div>
+            ))
+          ) : post.overlayText ? (
+            <div style={{ position: "absolute", zIndex: 17, left: 16, right: 16, top: post.overlayPosition === "top" ? 80 : post.overlayPosition === "center" ? "50%" : "auto", bottom: post.overlayPosition === "bottom" ? 24 : "auto", transform: post.overlayPosition === "center" ? "translateY(-50%)" : undefined, background: "rgba(0,0,0,.6)", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center", pointerEvents: "none" }}>
+              {post.overlayText}
+            </div>
+          ) : null}
+
+          {/* Cuore animato del doppio click */}
+          {showHeartBurst && (
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 18, pointerEvents: "none", animation: "zz-heart-burst 800ms ease-out forwards" }}>
+              <svg width="120" height="120" viewBox="0 0 20 20" fill="#FF4D4D" stroke="#fff" strokeWidth="0.6" style={{ filter: "drop-shadow(0 4px 16px rgba(255,77,77,.6))" }}>
+                <path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" />
+              </svg>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Frecce navigazione post desktop */}
       <div className="zz-post-nav" style={{ position: "absolute", right: 76, top: "50%", transform: "translateY(-50%)", zIndex: 25, flexDirection: "column", gap: 10, alignItems: "center" }}>
@@ -567,12 +589,6 @@ export default function Feed() {
             )}
           </a>
         </div>
-      </div>
-
-      {/* Tab desktop */}
-      <div className="zz-desktop" style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 20, display: "flex", gap: 24 }}>
-        <span onClick={() => setFeedTab("perTe")} style={{ color: feedTab === "perTe" ? "#fff" : "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, borderBottom: feedTab === "perTe" ? "2px solid #fff" : "2px solid transparent", paddingBottom: 4, cursor: "pointer" }}>Per te</span>
-        <span onClick={() => setFeedTab("seguiti")} style={{ color: feedTab === "seguiti" ? "#fff" : "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, borderBottom: feedTab === "seguiti" ? "2px solid #fff" : "2px solid transparent", paddingBottom: 4, cursor: "pointer" }}>Seguiti</span>
       </div>
 
       {/* Info post in basso */}
