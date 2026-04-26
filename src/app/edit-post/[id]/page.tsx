@@ -18,13 +18,21 @@ const FONTS = [
   { id: "sans", label: "Sans", family: "-apple-system, sans-serif" },
   { id: "serif", label: "Serif", family: "Georgia, serif" },
   { id: "mono", label: "Mono", family: "monospace" },
-  { id: "rounded", label: "Rounded", family: "Helvetica Neue, sans-serif" },
+  { id: "rounded", label: "Round", family: "Helvetica Neue, sans-serif" },
 ];
 
-const COLORS_TEXT = ["#ffffff", "#000000", "#FF4D4D", "#FFD700", "#4dffb8", "#60a5fa", "#f472b6", "#fb923c"];
+const COLORS = ["#ffffff", "#000000", "#FF4D4D", "#FFD700", "#4dffb8", "#60a5fa", "#f472b6", "#fb923c"];
 
 function formatDuration(s: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function formatTimeMs(ms: number) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  const cs = Math.floor((ms % 1000) / 100);
+  return `${m}:${String(s).padStart(2, "0")}.${cs}`;
 }
 
 type TextElement = {
@@ -40,10 +48,16 @@ type TextElement = {
   align: "left" | "center" | "right";
   bg: boolean;
   link: string;
+  startMs?: number;
+  endMs?: number;
 };
 
 function TextOverlayEditor({
-  mediaPreview, mediaType, elements, setElements, onClose,
+  mediaPreview,
+  mediaType,
+  elements,
+  setElements,
+  onClose,
 }: {
   mediaPreview: string | null;
   mediaType: "video" | "photo" | "text";
@@ -52,335 +66,474 @@ function TextOverlayEditor({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [showEditPanel, setShowEditPanel] = useState(false);
-  const [editText, setEditText] = useState("");
-
+  const [editing, setEditing] = useState(false);
+  const [videoDurationMs, setVideoDurationMs] = useState(0);
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const elementsRef = useRef(elements);
-  elementsRef.current = elements;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number } | null>(null);
+  const tlDragRef = useRef<{ mode: "left" | "right" | "move"; startX: number; origStartMs: number; origEndMs: number; trackW: number } | null>(null);
 
-  // Drag state — usato solo via ref per non causare re-render durante il drag
-  const dragState = useRef<{
-    id: string;
-    startClientX: number;
-    startClientY: number;
-    startElemX: number;
-    startElemY: number;
-    moved: boolean;
-  } | null>(null);
+  const isVideo = mediaType === "video";
+  const selectedEl = elements.find(e => e.id === selected) || null;
 
-  const selectedEl = elements.find(e => e.id === selected);
-
-  function updateEl(id: string, changes: Partial<TextElement>) {
-    setElements(elementsRef.current.map(e => e.id === id ? { ...e, ...changes } : e));
-  }
+  // Normalizza i testi: se c'è un video e mancano startMs/endMs, riempi con i default
+  useEffect(() => {
+    if (!isVideo || videoDurationMs === 0) return;
+    let needsUpdate = false;
+    const updated = elements.map(el => {
+      if (el.startMs === undefined || el.endMs === undefined) {
+        needsUpdate = true;
+        return {
+          ...el,
+          startMs: el.startMs ?? 0,
+          endMs: el.endMs ?? videoDurationMs,
+        };
+      }
+      return el;
+    });
+    if (needsUpdate) setElements(updated);
+  }, [isVideo, videoDurationMs]);
 
   function addText() {
     const newEl: TextElement = {
-      id: Date.now().toString(), text: "Nuovo testo",
-      x: 20, y: 40, font: "sans", size: 24, color: "#ffffff",
-      bold: false, italic: false, align: "center", bg: true, link: "",
+      id: Date.now().toString(),
+      text: "Testo",
+      x: 30, y: 40,
+      font: "sans",
+      size: 22,
+      color: "#ffffff",
+      bold: false, italic: false,
+      align: "center",
+      bg: true,
+      link: "",
+      startMs: 0,
+      endMs: isVideo && videoDurationMs > 0 ? videoDurationMs : 999999,
     };
-    setElements([...elementsRef.current, newEl]);
+    setElements([...elements, newEl]);
     setSelected(newEl.id);
-    setEditText(newEl.text);
-    setShowEditPanel(true);
+    setEditing(true);
   }
 
-  function openEdit(el: TextElement) {
-    setEditText(el.text);
-    setShowEditPanel(true);
+  function updateEl(id: string, changes: Partial<TextElement>) {
+    setElements(elements.map(e => e.id === id ? { ...e, ...changes } : e));
   }
 
-  function confirmEdit() {
-    if (selected) updateEl(selected, { text: editText });
-    setShowEditPanel(false);
-  }
-
-  function deleteSelected() {
-    if (!selected) return;
-    setElements(elementsRef.current.filter(e => e.id !== selected));
+  function deleteEl(id: string) {
+    setElements(elements.filter(e => e.id !== id));
     setSelected(null);
-    setShowEditPanel(false);
   }
 
-  // ---- DRAG HANDLERS ----
-  function handleTouchStart(e: React.TouchEvent, id: string) {
-    e.stopPropagation();
-    e.preventDefault();
+  // ===== Drag testo sul canvas =====
+  function startDrag(clientX: number, clientY: number, id: string) {
     setSelected(id);
-    const el = elementsRef.current.find(el => el.id === id);
+    const el = elements.find(el => el.id === id);
     if (!el) return;
-    const t = e.touches[0];
-    dragState.current = {
-      id, moved: false,
-      startClientX: t.clientX, startClientY: t.clientY,
-      startElemX: el.x, startElemY: el.y,
-    };
+    dragRef.current = { id, startX: clientX, startY: clientY, elemX: el.x, elemY: el.y };
   }
 
-  function handleTouchMove(e: React.TouchEvent, id: string) {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!dragState.current || dragState.current.id !== id || !canvasRef.current) return;
-    const t = e.touches[0];
-    const rect = canvasRef.current.getBoundingClientRect();
-    const dx = ((t.clientX - dragState.current.startClientX) / rect.width) * 100;
-    const dy = ((t.clientY - dragState.current.startClientY) / rect.height) * 100;
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) dragState.current.moved = true;
-    const newX = Math.max(0, Math.min(85, dragState.current.startElemX + dx));
-    const newY = Math.max(0, Math.min(85, dragState.current.startElemY + dy));
-    setElements(elementsRef.current.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
-  }
-
-  function handleTouchEnd(e: React.TouchEvent, id: string) {
-    e.stopPropagation();
-    if (!dragState.current) return;
-    const wasMoved = dragState.current.moved;
-    dragState.current = null;
-    // Solo se non è stato spostato → considera tap → apri edit
-    if (!wasMoved) {
-      const el = elementsRef.current.find(el => el.id === id);
-      if (el) openEdit(el);
+  useEffect(() => {
+    function getXY(e: MouseEvent | TouchEvent) {
+      if ("touches" in e && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      const m = e as MouseEvent;
+      return { x: m.clientX, y: m.clientY };
     }
-  }
-
-  function handleMouseDown(e: React.MouseEvent, id: string) {
-    e.stopPropagation();
-    e.preventDefault();
-    setSelected(id);
-    const el = elementsRef.current.find(el => el.id === id);
-    if (!el) return;
-    dragState.current = {
-      id, moved: false,
-      startClientX: e.clientX, startClientY: e.clientY,
-      startElemX: el.x, startElemY: el.y,
-    };
-
-    function onMove(ev: MouseEvent) {
-      if (!dragState.current || !canvasRef.current) return;
+    function onMove(e: MouseEvent | TouchEvent) {
+      if (!dragRef.current || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
-      const dx = ((ev.clientX - dragState.current.startClientX) / rect.width) * 100;
-      const dy = ((ev.clientY - dragState.current.startClientY) / rect.height) * 100;
-      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) dragState.current.moved = true;
-      const newX = Math.max(0, Math.min(85, dragState.current.startElemX + dx));
-      const newY = Math.max(0, Math.min(85, dragState.current.startElemY + dy));
-      setElements(elementsRef.current.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
+      const { x, y } = getXY(e);
+      const dx = ((x - dragRef.current.startX) / rect.width) * 100;
+      const dy = ((y - dragRef.current.startY) / rect.height) * 100;
+      const newX = Math.max(0, Math.min(95, dragRef.current.elemX + dx));
+      const newY = Math.max(0, Math.min(95, dragRef.current.elemY + dy));
+      const id = dragRef.current.id;
+      setElements(elements.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
     }
-
-    function onUp() {
-      if (!dragState.current) return;
-      const wasMoved = dragState.current.moved;
-      dragState.current = null;
-      if (!wasMoved) {
-        const el = elementsRef.current.find(el => el.id === id);
-        if (el) openEdit(el);
-      }
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-
+    function onUp() { dragRef.current = null; }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [elements]);
+
+  // ===== Drag timeline =====
+  function startTimelineDrag(mode: "left" | "right" | "move", clientX: number) {
+    if (!selectedEl || !trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    tlDragRef.current = {
+      mode,
+      startX: clientX,
+      origStartMs: selectedEl.startMs ?? 0,
+      origEndMs: selectedEl.endMs ?? videoDurationMs,
+      trackW: rect.width,
+    };
   }
+
+  useEffect(() => {
+    function getX(e: MouseEvent | TouchEvent) {
+      if ("touches" in e && e.touches.length > 0) return e.touches[0].clientX;
+      return (e as MouseEvent).clientX;
+    }
+    function onMove(e: MouseEvent | TouchEvent) {
+      if (!tlDragRef.current || !selectedEl || videoDurationMs === 0) return;
+      e.preventDefault?.();
+      const dx = getX(e) - tlDragRef.current.startX;
+      const dms = (dx / tlDragRef.current.trackW) * videoDurationMs;
+      const { mode, origStartMs, origEndMs } = tlDragRef.current;
+      const minRange = 200;
+      let newStart = origStartMs;
+      let newEnd = origEndMs;
+      if (mode === "left") {
+        newStart = Math.max(0, Math.min(origEndMs - minRange, origStartMs + dms));
+      } else if (mode === "right") {
+        newEnd = Math.max(origStartMs + minRange, Math.min(videoDurationMs, origEndMs + dms));
+      } else {
+        const range = origEndMs - origStartMs;
+        newStart = Math.max(0, Math.min(videoDurationMs - range, origStartMs + dms));
+        newEnd = newStart + range;
+      }
+      updateEl(selectedEl.id, { startMs: Math.round(newStart), endMs: Math.round(newEnd) });
+    }
+    function onUp() { tlDragRef.current = null; }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [selectedEl, videoDurationMs, elements]);
+
+  // ===== Player controls =====
+  function togglePlay() {
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) {
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }
+
+  function seekToMs(ms: number) {
+    if (!videoRef.current) return;
+    videoRef.current.currentTime = Math.max(0, Math.min(videoDurationMs / 1000, ms / 1000));
+    setCurrentTimeMs(ms);
+  }
+
+  function handleTimeUpdate() {
+    if (!videoRef.current) return;
+    setCurrentTimeMs(videoRef.current.currentTime * 1000);
+  }
+  function handleLoadedMetadata() {
+    if (!videoRef.current) return;
+    setVideoDurationMs((videoRef.current.duration || 0) * 1000);
+  }
+
+  function isVisibleAt(el: TextElement, timeMs: number) {
+    if (!isVideo) return true;
+    const start = el.startMs ?? 0;
+    const end = el.endMs ?? videoDurationMs;
+    return timeMs >= start && timeMs <= end;
+  }
+  function shouldRender(el: TextElement) {
+    if (selected === el.id) return true;
+    if (!isPlaying) return true;
+    return isVisibleAt(el, currentTimeMs);
+  }
+
+  const toolbarFlipBelow = !!selectedEl && selectedEl.y < 15;
+  const playPct = videoDurationMs > 0 ? (currentTimeMs / videoDurationMs) * 100 : 0;
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "#000", display: "flex", flexDirection: "column" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "48px 20px 14px", flexShrink: 0, background: "rgba(0,0,0,.95)" }}>
-        <button onClick={onClose}
-          style={{ padding: "9px 18px", borderRadius: 10, background: "rgba(255,255,255,.1)", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "44px 16px 12px", flexShrink: 0, background: "rgba(0,0,0,.85)", borderBottom: "0.5px solid rgba(255,255,255,.06)" }}>
+        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(255,255,255,.1)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
           Annulla
         </button>
-        <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>Editor testo</span>
-        <button onClick={onClose}
-          style={{ padding: "9px 18px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>Editor testo</span>
+        <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
           Fatto
         </button>
       </div>
 
       {/* Canvas */}
-      <div
-        ref={canvasRef}
-        onClick={() => setSelected(null)}
-        style={{ flex: 1, position: "relative", overflow: "hidden", touchAction: "none", background: "#111" }}>
+      <div ref={canvasRef} onClick={() => { setSelected(null); setEditing(false); }}
+        style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
 
-        {mediaPreview && mediaType === "video" && (
-          <video src={mediaPreview} style={{ width: "100%", height: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />
+        {/* Media di sfondo */}
+        {mediaPreview && isVideo && (
+          <video
+            ref={videoRef}
+            src={mediaPreview}
+            style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
+            muted loop playsInline
+            onLoadedMetadata={handleLoadedMetadata}
+            onTimeUpdate={handleTimeUpdate}
+            onPause={() => setIsPlaying(false)}
+            onPlay={() => setIsPlaying(true)}
+          />
         )}
         {mediaPreview && mediaType === "photo" && (
-          <img src={mediaPreview} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="" />
+          <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} alt="" />
         )}
-        {!mediaPreview && (
+        {(!mediaPreview || mediaType === "text") && (
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0030, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "rgba(255,255,255,.2)", fontSize: 13 }}>Anteprima</span>
+            {!mediaPreview && <span style={{ color: "rgba(255,255,255,.2)", fontSize: 13 }}>Anteprima</span>}
           </div>
         )}
 
-        {/* Elementi testo */}
+        {/* Testi */}
         {elements.map(el => {
+          if (!shouldRender(el)) return null;
           const fontObj = FONTS.find(f => f.id === el.font);
-          const isSel = selected === el.id;
+          const isSelected = selected === el.id;
+          const dimmed = isVideo && isSelected && !isVisibleAt(el, currentTimeMs) && isPlaying;
           return (
             <div
               key={el.id}
+              onMouseDown={(e) => { e.stopPropagation(); startDrag(e.clientX, e.clientY, el.id); }}
+              onTouchStart={(e) => { e.stopPropagation(); const t = e.touches[0]; startDrag(t.clientX, t.clientY, el.id); }}
+              onDoubleClick={(e) => { e.stopPropagation(); setSelected(el.id); setEditing(true); }}
+              onClick={(e) => e.stopPropagation()}
               style={{
                 position: "absolute",
-                left: `${el.x}%`, top: `${el.y}%`,
-                zIndex: 10,
-                cursor: "grab",
-                touchAction: "none",
+                left: `${el.x}%`,
+                top: `${el.y}%`,
+                cursor: "move",
                 userSelect: "none",
-                padding: el.bg ? "5px 10px" : "5px 2px",
-                background: el.bg ? "rgba(0,0,0,.6)" : "transparent",
-                borderRadius: 8,
-                outline: isSel ? "2px solid #FF4D4D" : "2px solid transparent",
-                outlineOffset: 3,
-              }}
-              onMouseDown={(e) => handleMouseDown(e, el.id)}
-              onTouchStart={(e) => handleTouchStart(e, el.id)}
-              onTouchMove={(e) => handleTouchMove(e, el.id)}
-              onTouchEnd={(e) => handleTouchEnd(e, el.id)}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <span style={{
-                color: el.color,
-                fontFamily: fontObj?.family,
-                fontSize: el.size,
-                fontWeight: el.bold ? 700 : 400,
-                fontStyle: el.italic ? "italic" : "normal",
-                display: "block",
-                whiteSpace: "nowrap",
+                outline: isSelected ? "2px solid #FF4D4D" : "none",
+                outlineOffset: 2,
+                borderRadius: 6,
+                padding: el.bg ? "4px 10px" : 0,
+                background: el.bg ? "rgba(0,0,0,.55)" : "transparent",
+                maxWidth: "70%",
+                opacity: dimmed ? 0.4 : 1,
               }}>
-                {el.text || "Testo"}
-              </span>
+              {editing && isSelected ? (
+                <input
+                  autoFocus
+                  value={el.text}
+                  onChange={e => updateEl(el.id, { text: e.target.value })}
+                  onBlur={() => setEditing(false)}
+                  onClick={e => e.stopPropagation()}
+                  onMouseDown={e => e.stopPropagation()}
+                  style={{
+                    background: "transparent", border: "none", outline: "none",
+                    color: el.color,
+                    fontFamily: fontObj?.family,
+                    fontSize: el.size,
+                    fontWeight: el.bold ? 700 : 400,
+                    fontStyle: el.italic ? "italic" : "normal",
+                    textAlign: el.align,
+                    width: Math.max(80, el.text.length * el.size * 0.6),
+                    minWidth: 60,
+                  }}
+                />
+              ) : (
+                <span style={{
+                  color: el.color,
+                  fontFamily: fontObj?.family,
+                  fontSize: el.size,
+                  fontWeight: el.bold ? 700 : 400,
+                  fontStyle: el.italic ? "italic" : "normal",
+                  textAlign: el.align,
+                  display: "block",
+                  whiteSpace: "nowrap",
+                }}>
+                  {el.text || "Testo"}
+                </span>
+              )}
             </div>
           );
         })}
 
-        {/* Bottone aggiungi */}
-        <button
-          onClick={(e) => { e.stopPropagation(); addText(); }}
-          style={{
-            position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)",
-            padding: "11px 28px", borderRadius: 24,
-            background: "rgba(255,255,255,.15)", backdropFilter: "blur(8px)",
-            border: "1px solid rgba(255,255,255,.3)",
-            color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", zIndex: 20,
-          }}>
-          + Aggiungi testo
-        </button>
-      </div>
-
-      {/* Toolbar elemento selezionato */}
-      {selectedEl && !showEditPanel && (
-        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "12px 16px 28px", flexShrink: 0, maxHeight: "44vh", overflowY: "auto" }}>
-
-          <div style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center", marginBottom: 12 }}>
-            Trascina il testo per spostarlo
-          </div>
-
-          {/* Modifica testo + elimina */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-            <button onClick={() => openEdit(selectedEl)}
-              style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: "rgba(255,77,77,.15)", border: "1.5px solid rgba(255,77,77,.4)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              ✏️ Modifica testo
-            </button>
-            <button onClick={deleteSelected}
-              style={{ padding: "11px 18px", borderRadius: 12, background: "rgba(255,50,50,.08)", border: "1px solid rgba(255,50,50,.2)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              🗑
-            </button>
-          </div>
-
-          {/* Font */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Font</div>
-            <div style={{ display: "flex", gap: 6 }}>
+        {/* Toolbar fluttuante (segue il testo selezionato) */}
+        {selectedEl && !editing && (
+          <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              left: `${selectedEl.x}%`,
+              top: `${selectedEl.y}%`,
+              transform: toolbarFlipBelow ? "translate(-50%, calc(100% + 14px))" : "translate(-50%, calc(-100% - 14px))",
+              zIndex: 50,
+              background: "rgba(20,20,20,.96)",
+              backdropFilter: "blur(12px)",
+              borderRadius: 12,
+              padding: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              boxShadow: "0 6px 20px rgba(0,0,0,.5)",
+              border: "0.5px solid rgba(255,255,255,.1)",
+              maxWidth: 320,
+            }}>
+            {/* Riga 1: font + size */}
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               {FONTS.map(f => (
                 <button key={f.id} onClick={() => updateEl(selectedEl.id, { font: f.id })}
-                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.font === f.id ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.font === f.id ? "rgba(255,77,77,.12)" : "rgba(255,255,255,.04)", color: selectedEl.font === f.id ? "#FF4D4D" : "rgba(255,255,255,.7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: f.family }}>
-                  {f.label}
-                </button>
+                  style={{
+                    padding: "5px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, fontFamily: f.family, cursor: "pointer",
+                    border: selectedEl.font === f.id ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)",
+                    background: selectedEl.font === f.id ? "rgba(255,77,77,.15)" : "rgba(255,255,255,.04)",
+                    color: selectedEl.font === f.id ? "#FF4D4D" : "rgba(255,255,255,.85)",
+                  }}>{f.label}</button>
               ))}
+              <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.1)", margin: "0 2px" }} />
+              <button onClick={() => updateEl(selectedEl.id, { size: Math.max(12, selectedEl.size - 2) })}
+                style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.05)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, padding: 0 }}>−</button>
+              <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, minWidth: 24, textAlign: "center" }}>{selectedEl.size}</span>
+              <button onClick={() => updateEl(selectedEl.id, { size: Math.min(72, selectedEl.size + 2) })}
+                style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.05)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, padding: 0 }}>+</button>
             </div>
-          </div>
 
-          {/* Dimensione */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}>
-              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px" }}>Dimensione</div>
-              <span style={{ color: "#FF4D4D", fontSize: 12, fontWeight: 700 }}>{selectedEl.size}px</span>
-            </div>
-            <input type="range" min="14" max="72" value={selectedEl.size} onChange={e => updateEl(selectedEl.id, { size: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "#FF4D4D" }} />
-          </div>
-
-          {/* Stile */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Stile</div>
-            <div style={{ display: "flex", gap: 6 }}>
+            {/* Riga 2: B / I / Aa + colori + cestino */}
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <button onClick={() => updateEl(selectedEl.id, { bold: !selectedEl.bold })}
-                style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: selectedEl.bold ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bold ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.bold ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 15, fontWeight: 900, cursor: "pointer" }}>B</button>
+                style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.bold ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bold ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.bold ? "#FF4D4D" : "#fff", fontSize: 13, fontWeight: 900, cursor: "pointer" }}>B</button>
               <button onClick={() => updateEl(selectedEl.id, { italic: !selectedEl.italic })}
-                style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: selectedEl.italic ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.italic ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.italic ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 15, fontStyle: "italic", cursor: "pointer" }}>I</button>
+                style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.italic ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.italic ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.italic ? "#FF4D4D" : "#fff", fontSize: 13, fontStyle: "italic", cursor: "pointer", fontWeight: 700 }}>I</button>
               <button onClick={() => updateEl(selectedEl.id, { bg: !selectedEl.bg })}
-                style={{ flex: 2, padding: "9px 0", borderRadius: 10, border: selectedEl.bg ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bg ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.bg ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 12, cursor: "pointer" }}>
-                Sfondo
+                title={selectedEl.bg ? "Rimuovi sfondo" : "Aggiungi sfondo"}
+                style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.bg ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bg ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.bg ? "#FF4D4D" : "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Aa</button>
+              <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.1)", margin: "0 2px" }} />
+              {COLORS.map(c => (
+                <button key={c} onClick={() => updateEl(selectedEl.id, { color: c })}
+                  style={{
+                    width: 20, height: 20, borderRadius: "50%", background: c, cursor: "pointer", padding: 0, flexShrink: 0,
+                    border: selectedEl.color === c ? "2px solid #FF4D4D" : "1.5px solid rgba(255,255,255,.2)",
+                    boxShadow: selectedEl.color === c ? "0 0 0 1px rgba(0,0,0,.5)" : "none",
+                  }} />
+              ))}
+              <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.1)", margin: "0 2px" }} />
+              <button onClick={() => deleteEl(selectedEl.id)}
+                style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid rgba(255,77,77,.3)", background: "rgba(255,77,77,.08)", color: "#FF4D4D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#FF4D4D" strokeWidth="1.5"><path d="M2 4h10M5 4V2h4v2M4 4l1 9h4l1-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             </div>
           </div>
+        )}
 
-          {/* Colore */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Colore</div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {COLORS_TEXT.map(c => (
-                <button key={c} onClick={() => updateEl(selectedEl.id, { color: c })}
-                  style={{ width: 34, height: 34, borderRadius: "50%", background: c, border: selectedEl.color === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.15)", cursor: "pointer" }} />
-              ))}
-            </div>
-          </div>
+        {/* Bottone aggiungi testo */}
+        <button onClick={(e) => { e.stopPropagation(); addText(); }}
+          style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", padding: "10px 22px", borderRadius: 22, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", gap: 6 }}>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M7 2v10M2 7h10" strokeLinecap="round" /></svg>
+          Aggiungi testo
+        </button>
+      </div>
 
-          {/* Posizione rapida */}
-          <div>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Posizione rapida</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-              {[
-                { label: "↖", x: 5, y: 8 }, { label: "↑", x: 38, y: 8 }, { label: "↗", x: 68, y: 8 },
-                { label: "←", x: 5, y: 44 }, { label: "⊙", x: 38, y: 44 }, { label: "→", x: 68, y: 44 },
-                { label: "↙", x: 5, y: 78 }, { label: "↓", x: 38, y: 78 }, { label: "↘", x: 68, y: 78 },
-              ].map(p => (
-                <button key={p.label} onClick={() => updateEl(selectedEl.id, { x: p.x, y: p.y })}
-                  style={{ padding: "9px 0", borderRadius: 8, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)", fontSize: 15, cursor: "pointer" }}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Hint sopra timeline (foto/testo) */}
+      {!isVideo && (
+        <div style={{ background: "#0d0d0d", borderTop: "0.5px solid rgba(255,255,255,.06)", padding: "10px 16px 28px", flexShrink: 0, color: "rgba(255,255,255,.4)", fontSize: 11, textAlign: "center" }}>
+          Doppio tap sul testo per modificarlo · Trascina per spostarlo
         </div>
       )}
 
-      {/* Pannello modifica testo */}
-      {showEditPanel && (
-        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "16px 20px 32px", flexShrink: 0 }}>
-          <div style={{ color: "rgba(255,255,255,.5)", fontSize: 12, marginBottom: 10 }}>Modifica testo</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              autoFocus
-              value={editText}
-              onChange={e => setEditText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") confirmEdit(); }}
-              placeholder="Scrivi il testo..."
-              style={{
-                flex: 1, padding: "13px 16px", borderRadius: 14,
-                background: "#1a1a1a", border: "1.5px solid #FF4D4D",
-                color: "#fff", fontSize: 16, outline: "none",
-              }}
-            />
-            <button onClick={confirmEdit}
-              style={{ padding: "13px 20px", borderRadius: 14, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-              OK
+      {/* Timeline (solo video) */}
+      {isVideo && (
+        <div style={{ background: "#0d0d0d", borderTop: "0.5px solid rgba(255,255,255,.06)", padding: "10px 14px 22px", flexShrink: 0 }}>
+          {/* Riga player */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <button onClick={togglePlay}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "#FF4D4D", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {isPlaying ? (
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                  <rect x="2" y="2" width="3.5" height="10" rx="1" fill="#fff" />
+                  <rect x="8.5" y="2" width="3.5" height="10" rx="1" fill="#fff" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                  <path d="M3.5 2L11 7l-7.5 5V2z" fill="#fff" />
+                </svg>
+              )}
             </button>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,.5)" }}>
+                <span style={{ fontWeight: 700, color: "#fff", fontFeatureSettings: '"tnum"' as any }}>{formatTimeMs(currentTimeMs)}</span>
+                <span style={{ fontFeatureSettings: '"tnum"' as any }}>{formatTimeMs(videoDurationMs)}</span>
+              </div>
+              {selectedEl ? (
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.4)" }}>
+                  Testo selezionato visibile da <span style={{ color: "#FF4D4D", fontWeight: 700 }}>{formatTimeMs(selectedEl.startMs ?? 0)}</span> a <span style={{ color: "#FF4D4D", fontWeight: 700 }}>{formatTimeMs(selectedEl.endMs ?? videoDurationMs)}</span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>
+                  {elements.length === 0 ? "Aggiungi un testo per iniziare" : "Tocca un testo per regolarne la durata"}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Track */}
+          <div ref={trackRef}
+            onMouseDown={(e) => {
+              if (!videoDurationMs || !trackRef.current) return;
+              const rect = trackRef.current.getBoundingClientRect();
+              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              seekToMs(ratio * videoDurationMs);
+            }}
+            style={{ position: "relative", height: 44, background: "rgba(255,255,255,.05)", borderRadius: 8, cursor: "pointer", overflow: "hidden", touchAction: "none" }}>
+
+            {/* Blocchi tutti i testi (read-only, sempre visibili) */}
+            {videoDurationMs > 0 && elements.map(el => {
+              if (selected === el.id) return null;
+              const left = ((el.startMs ?? 0) / videoDurationMs) * 100;
+              const width = (((el.endMs ?? videoDurationMs) - (el.startMs ?? 0)) / videoDurationMs) * 100;
+              return (
+                <div key={el.id} onClick={(e) => { e.stopPropagation(); setSelected(el.id); }}
+                  style={{ position: "absolute", left: `${left}%`, top: 6, width: `${width}%`, height: 32, background: "rgba(255,255,255,.12)", borderRadius: 5, border: "1px solid rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}>
+                  <span style={{ color: "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 600, padding: "0 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{el.text}</span>
+                </div>
+              );
+            })}
+
+            {/* Blocco testo selezionato (con maniglie drag) */}
+            {selectedEl && videoDurationMs > 0 && (() => {
+              const left = ((selectedEl.startMs ?? 0) / videoDurationMs) * 100;
+              const width = (((selectedEl.endMs ?? videoDurationMs) - (selectedEl.startMs ?? 0)) / videoDurationMs) * 100;
+              return (
+                <div style={{ position: "absolute", left: `${left}%`, top: 6, width: `${width}%`, height: 32, background: "rgba(255,77,77,.25)", borderRadius: 6, border: "1.5px solid #FF4D4D", display: "flex", alignItems: "center", overflow: "visible", boxSizing: "border-box" }}
+                  onMouseDown={(e) => { e.stopPropagation(); startTimelineDrag("move", e.clientX); }}
+                  onTouchStart={(e) => { e.stopPropagation(); startTimelineDrag("move", e.touches[0].clientX); }}>
+                  {/* Handle sinistro */}
+                  <div onMouseDown={(e) => { e.stopPropagation(); startTimelineDrag("left", e.clientX); }}
+                    onTouchStart={(e) => { e.stopPropagation(); startTimelineDrag("left", e.touches[0].clientX); }}
+                    style={{ position: "absolute", left: -8, top: -2, width: 16, height: 36, cursor: "ew-resize", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 4, height: 22, background: "#fff", borderRadius: 2, boxShadow: "0 1px 3px rgba(0,0,0,.5)" }} />
+                  </div>
+                  <span style={{ flex: 1, color: "#fff", fontSize: 10, fontWeight: 700, padding: "0 12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center", pointerEvents: "none" }}>{selectedEl.text}</span>
+                  {/* Handle destro */}
+                  <div onMouseDown={(e) => { e.stopPropagation(); startTimelineDrag("right", e.clientX); }}
+                    onTouchStart={(e) => { e.stopPropagation(); startTimelineDrag("right", e.touches[0].clientX); }}
+                    style={{ position: "absolute", right: -8, top: -2, width: 16, height: 36, cursor: "ew-resize", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 4, height: 22, background: "#fff", borderRadius: 2, boxShadow: "0 1px 3px rgba(0,0,0,.5)" }} />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Playhead */}
+            {videoDurationMs > 0 && (
+              <div style={{ position: "absolute", left: `${playPct}%`, top: 0, bottom: 0, width: 2, background: "#fff", boxShadow: "0 0 4px rgba(0,0,0,.6)", pointerEvents: "none", zIndex: 10 }} />
+            )}
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 10, color: "rgba(255,255,255,.3)", textAlign: "center" }}>
+            Doppio tap sul testo per modificarlo · Trascina sul video per spostarlo · Trascina i bordi del blocco per la durata
           </div>
         </div>
       )}
@@ -413,7 +566,7 @@ export default function EditPost() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
-  const progressInterval = useRef<NodeJS.Timeout | null>(null);
+  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -614,7 +767,7 @@ export default function EditPost() {
               <div style={{ color: textElements.length > 0 ? "#FF4D4D" : "#fff", fontWeight: 700, fontSize: 13 }}>
                 {textElements.length > 0 ? `${textElements.length} elemento/i testo` : "Aggiungi testo sovrapposto"}
               </div>
-              <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>Font, colore, posizione, link</div>
+              <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>Font, colore, posizione, durata</div>
             </div>
           </button>
         )}

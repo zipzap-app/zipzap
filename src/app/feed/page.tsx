@@ -503,7 +503,15 @@ export default function Feed() {
 
       {/* Overlay testo */}
       {post.overlayData && post.overlayData.length > 0 ? (
-        post.overlayData.map((el: any) => (
+        post.overlayData
+          .filter((el: any) => {
+            if (post.postType !== "video") return true;
+            const curMs = progress * (duration || 0) * 1000;
+            const start = typeof el.startMs === "number" ? el.startMs : 0;
+            const end = typeof el.endMs === "number" ? el.endMs : Infinity;
+            return curMs >= start && curMs <= end;
+          })
+          .map((el: any) => (
           <div key={el.id} style={{ position: "absolute", zIndex: 15, left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
             <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
           </div>
