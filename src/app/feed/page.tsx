@@ -49,7 +49,7 @@ function formatCount(n: number) {
   return String(n);
 }
 
-function NavDesktop({ active }: { active?: string }) {
+function NavDesktop({ active, unread }: { active?: string; unread?: number }) {
   return (
     <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.85)", borderRight: "0.5px solid rgba(255,255,255,.08)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
@@ -61,11 +61,17 @@ function NavDesktop({ active }: { active?: string }) {
       {[
         { label: "Home", href: "/feed" },
         { label: "Esplora", href: "/explore" },
+        { label: "Notifiche", href: "/notifications", badge: unread },
         { label: "Zap Store", href: "/store", isStore: true },
         { label: "Profilo", href: "/profile" },
       ].map(item => (
         <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: active === item.href ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: (item as any).isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>
           {item.label}
+          {(item as any).badge > 0 && (
+            <span style={{ marginLeft: "auto", background: "#FF4D4D", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>
+              {(item as any).badge}
+            </span>
+          )}
         </a>
       ))}
       <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 13, marginTop: 8 }}>
@@ -95,6 +101,7 @@ export default function Feed() {
   const [shareMsg, setShareMsg] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
   const postsRef = useRef<Post[]>([]);
@@ -180,6 +187,10 @@ export default function Feed() {
               window.history.replaceState({}, "", "/feed");
             }
           } else { setAllPosts(mockPosts); }
+
+          // Carica notifiche non lette
+          const { count } = await supabase.from("notifications").select("*", { count: "exact", head: true }).eq("recipient_id", user.id).eq("read", false);
+          setUnreadNotifs(count || 0);
         } else {
           const { data } = await supabase.from("posts").select("*, profiles(username, full_name, avatar_url)").eq("visibility", "public").order("created_at", { ascending: false }).limit(20);
           const mapped = data && data.length > 0 ? data.map(mapPost) : mockPosts;
@@ -261,6 +272,12 @@ export default function Feed() {
     } else {
       await supabase.from("likes").insert({ user_id: user.id, post_id: post.id });
       setLiked(true); setLikesCount(c => c + 1);
+      if (post.userId !== user.id) {
+        await supabase.from("notifications").insert({
+          recipient_id: post.userId, sender_id: user.id,
+          type: "like", post_id: post.id,
+        });
+      }
     }
   }
 
@@ -276,6 +293,12 @@ export default function Feed() {
     } else {
       await supabase.from("bookmarks").insert({ user_id: user.id, post_id: post.id });
       setBookmarked(true);
+      if (post.userId !== user.id) {
+        await supabase.from("notifications").insert({
+          recipient_id: post.userId, sender_id: user.id,
+          type: "bookmark", post_id: post.id,
+        });
+      }
     }
   }
 
@@ -310,13 +333,10 @@ export default function Feed() {
   if (feedTab === "seguiti" && !loadingFollowed && followedPosts.length === 0) {
     return (
       <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
-        <style>{`
-          @media (max-width: 768px) { .zz-desktop { display: none !important; } }
-          @media (min-width: 769px) { .zz-mobile { display: none !important; } }
-        `}</style>
-        <NavDesktop active="/feed" />
+        <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-mobile { display: none !important; } }`}</style>
+        <NavDesktop active="/feed" unread={unreadNotifs} />
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
-          <p style={{ color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center" }}>Nessun post dai seguiti</p>
+          <p style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>Nessun post dai seguiti</p>
           <button onClick={() => window.location.href = "/explore"} style={{ padding: "12px 24px", borderRadius: 14, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Scopri creator ⚡</button>
         </div>
       </div>
@@ -346,10 +366,9 @@ export default function Feed() {
         .zz-post-nav { display: none; }
       `}</style>
 
-      {/* Sfondo gradient */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
 
-      {/* Area video — su desktop parte dopo la sidebar */}
+      {/* Area video */}
       <div className="zz-video-area" style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
         {currentMedia && (
           <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -361,8 +380,6 @@ export default function Feed() {
               <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
                 style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
             )}
-
-            {/* Frecce carosello foto — dentro il media */}
             {isCarousel && carouselIndex > 0 && (
               <button onClick={() => setCarouselIndex(c => c - 1)}
                 style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -379,16 +396,13 @@ export default function Feed() {
         )}
       </div>
 
-      {/* Gradient overlay */}
       <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
 
-      {/* Overlay testo custom */}
+      {/* Overlay testo */}
       {post.overlayData && post.overlayData.length > 0 ? (
         post.overlayData.map((el: any) => (
           <div key={el.id} style={{ position: "absolute", zIndex: 15, left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
-            <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>
-              {el.text}
-            </span>
+            <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
           </div>
         ))
       ) : post.overlayText ? (
@@ -407,19 +421,17 @@ export default function Feed() {
         </div>
       )}
 
-      {/* Frecce navigazione post — solo desktop, centrate verticalmente a destra del video */}
+      {/* Frecce navigazione post desktop */}
       <div className="zz-post-nav" style={{ position: "absolute", right: 76, top: "50%", transform: "translateY(-50%)", zIndex: 25, flexDirection: "column", gap: 10, alignItems: "center" }}>
-        <button onClick={goPrev}
-          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.18)", cursor: "pointer", opacity: current === 0 ? .25 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={goPrev} style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.18)", cursor: "pointer", opacity: current === 0 ? .25 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <button onClick={goNext}
-          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.18)", cursor: "pointer", opacity: current === posts.length - 1 ? .25 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={goNext} style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.18)", cursor: "pointer", opacity: current === posts.length - 1 ? .25 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       </div>
 
-      <NavDesktop active="/feed" />
+      <NavDesktop active="/feed" unread={unreadNotifs} />
 
       {/* Topbar mobile */}
       <div className="zz-mobile" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "44px 16px 12px" }}>
@@ -429,9 +441,20 @@ export default function Feed() {
           </div>
           <span style={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
         </div>
-        <div style={{ display: "flex", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span onClick={() => setFeedTab("perTe")} style={{ color: feedTab === "perTe" ? "#fff" : "rgba(255,255,255,.4)", fontSize: 13, borderBottom: feedTab === "perTe" ? "1.5px solid #fff" : "none", paddingBottom: 2, cursor: "pointer" }}>Per te</span>
           <span onClick={() => setFeedTab("seguiti")} style={{ color: feedTab === "seguiti" ? "#fff" : "rgba(255,255,255,.4)", fontSize: 13, borderBottom: feedTab === "seguiti" ? "1.5px solid #fff" : "none", paddingBottom: 2, cursor: "pointer" }}>Seguiti</span>
+          {/* Campanella mobile */}
+          <a href="/notifications" style={{ position: "relative", textDecoration: "none" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.8">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {unreadNotifs > 0 && (
+              <div style={{ position: "absolute", top: -4, right: -4, width: 14, height: 14, borderRadius: "50%", background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: "#fff" }}>
+                {unreadNotifs > 9 ? "9+" : unreadNotifs}
+              </div>
+            )}
+          </a>
         </div>
       </div>
 
@@ -476,8 +499,6 @@ export default function Feed() {
 
       {/* Azioni destra */}
       <div style={{ position: "absolute", right: 12, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-
-        {/* Avatar */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid rgba(255,255,255,.8)", background: post.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>
             {post.initials}
@@ -487,17 +508,13 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Like */}
         <button onClick={toggleLike} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: liked ? "rgba(255,77,77,.25)" : "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="22" height="22" viewBox="0 0 20 20" fill={liked ? "#FF4D4D" : "none"} stroke={liked ? "#FF4D4D" : "#fff"} strokeWidth="1.6">
-              <path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" />
-            </svg>
+            <svg width="22" height="22" viewBox="0 0 20 20" fill={liked ? "#FF4D4D" : "none"} stroke={liked ? "#FF4D4D" : "#fff"} strokeWidth="1.6"><path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" /></svg>
           </div>
           <span style={{ color: liked ? "#FF4D4D" : "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(likesCount)}</span>
         </button>
 
-        {/* Commenti */}
         <button onClick={() => setCommentPostId(post.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6"><path d="M3 3h14v10H3z" /><path d="M7 17h6M10 13v4" /></svg>
@@ -505,7 +522,6 @@ export default function Feed() {
           <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>{formatCount(post.comments)}</span>
         </button>
 
-        {/* Bookmark */}
         <button onClick={toggleBookmark} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: bookmarked ? "rgba(255,200,0,.2)" : "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill={bookmarked ? "#FFD700" : "none"} stroke={bookmarked ? "#FFD700" : "#fff"} strokeWidth="1.6"><path d="M4 3h12v15l-6-4-6 4V3z" strokeLinejoin="round" /></svg>
@@ -513,7 +529,6 @@ export default function Feed() {
           <span style={{ color: bookmarked ? "#FFD700" : "rgba(255,255,255,.8)", fontSize: 11 }}>Salva</span>
         </button>
 
-        {/* Condividi */}
         <button onClick={() => setShowShare(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: "none", background: "none", cursor: "pointer" }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6"><path d="M17 7L10 4 3 7l7 3.5L17 7z" /><path d="M3 11l7 3.5L17 11M3 15l7 3.5L17 15" /></svg>
@@ -521,7 +536,6 @@ export default function Feed() {
           <span style={{ color: "rgba(255,255,255,.8)", fontSize: 11 }}>Condividi</span>
         </button>
 
-        {/* Audio */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <button onClick={handleUnmute} style={{ width: 48, height: 48, borderRadius: "50%", background: muted ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.15)", border: muted ? "1.5px solid rgba(255,77,77,.5)" : "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             {muted ? (
@@ -550,17 +564,29 @@ export default function Feed() {
 
       {/* Navbar mobile bottom */}
       <div className="zz-mobile" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, display: "flex", alignItems: "center", justifyContent: "space-around", padding: "10px 16px 28px", background: "rgba(0,0,0,.88)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
-        {[{ href: "/feed", label: "Home", active: true }, { href: "/explore", label: "Esplora" }, { href: "/create", label: "Crea", isCreate: true }, { href: "/store", label: "Store", isStore: true }, { href: "/profile", label: "Profilo" }].map(item => (
-          <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
+        {[
+          { href: "/feed", label: "Home", active: true },
+          { href: "/explore", label: "Esplora" },
+          { href: "/create", label: "Crea", isCreate: true },
+          { href: "/notifications", label: "🔔", isNotif: true },
+          { href: "/profile", label: "Profilo" },
+        ].map(item => (
+          <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none", position: "relative" }}>
             {(item as any).isCreate ? (
               <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
               </div>
-            ) : (item as any).isStore ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,77,77,.12)", border: "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" /></svg>
-                <span style={{ color: "#FF4D4D", fontSize: 11, fontWeight: 700 }}>Store</span>
-              </div>
+            ) : (item as any).isNotif ? (
+              <>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="1.6">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {unreadNotifs > 0 && (
+                  <div style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: "#fff" }}>
+                    {unreadNotifs > 9 ? "9+" : unreadNotifs}
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke={(item as any).active ? "#fff" : "rgba(255,255,255,.35)"} strokeWidth={(item as any).active ? "1.8" : "1.6"}>
