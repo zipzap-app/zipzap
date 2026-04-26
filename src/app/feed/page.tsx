@@ -103,10 +103,17 @@ export default function Feed() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [showHeartBurst, setShowHeartBurst] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
   const postsRef = useRef<Post[]>([]);
   const currentRef = useRef(0);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
   const posts = feedTab === "perTe" ? allPosts : followedPosts;
   postsRef.current = posts;
@@ -225,7 +232,81 @@ export default function Feed() {
   }, [feedTab, followingIds]);
 
   useEffect(() => { setCurrent(0); setCarouselIndex(0); }, [feedTab]);
-  useEffect(() => { setCarouselIndex(0); }, [current]);
+  useEffect(() => { setCarouselIndex(0); setProgress(0); setDuration(0); setIsPaused(false); }, [current]);
+
+  // Drag globale per il seek della progress bar
+  useEffect(() => {
+    if (!isSeeking) return;
+    function getX(e: MouseEvent | TouchEvent): number {
+      if ("touches" in e && e.touches.length > 0) return e.touches[0].clientX;
+      return (e as MouseEvent).clientX;
+    }
+    function onMove(e: MouseEvent | TouchEvent) {
+      if (!progressBarRef.current || !videoRef.current || !videoRef.current.duration) return;
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (getX(e) - rect.left) / rect.width));
+      videoRef.current.currentTime = ratio * videoRef.current.duration;
+      setProgress(ratio);
+    }
+    function onUp() { setIsSeeking(false); }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [isSeeking]);
+
+  function handleTimeUpdate() {
+    if (!videoRef.current || !videoRef.current.duration || isSeeking) return;
+    setProgress(videoRef.current.currentTime / videoRef.current.duration);
+  }
+  function handleLoadedMetadata() {
+    if (!videoRef.current) return;
+    setDuration(videoRef.current.duration || 0);
+  }
+  function handleSeekStart(e: React.MouseEvent | React.TouchEvent) {
+    e.stopPropagation();
+    if (!progressBarRef.current || !videoRef.current || !videoRef.current.duration) return;
+    setIsSeeking(true);
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    videoRef.current.currentTime = ratio * videoRef.current.duration;
+    setProgress(ratio);
+  }
+
+  function handleMediaClick() {
+    if (clickTimerRef.current) {
+      // Doppio click: like + cuore animato
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      if (!liked) toggleLike();
+      setShowHeartBurst(true);
+      setTimeout(() => setShowHeartBurst(false), 800);
+    } else {
+      clickTimerRef.current = setTimeout(() => {
+        // Singolo click: pausa silenziosa (solo per video)
+        const p = posts[currentRef.current];
+        if (p && p.postType === "video" && videoRef.current) {
+          if (videoRef.current.paused) {
+            videoRef.current.play().catch(() => {});
+            setIsPaused(false);
+            if (musicRef.current && !muted) musicRef.current.play().catch(() => {});
+          } else {
+            videoRef.current.pause();
+            setIsPaused(true);
+            if (musicRef.current) musicRef.current.pause();
+          }
+        }
+        clickTimerRef.current = null;
+      }, 250);
+    }
+  }
 
   useEffect(() => {
     if (musicRef.current) { musicRef.current.pause(); musicRef.current.src = ""; }
@@ -365,8 +446,15 @@ export default function Feed() {
           .zz-video-area { left: 220px !important; right: 72px !important; }
           .zz-post-nav { display: flex !important; }
           .zz-info { left: 236px !important; }
+          .zz-progress { left: 232px !important; right: 84px !important; bottom: 16px !important; }
         }
         .zz-post-nav { display: none; }
+        @keyframes zz-heart-burst {
+          0%   { transform: translate(-50%,-50%) scale(0.3); opacity: 0; }
+          25%  { transform: translate(-50%,-50%) scale(1.25); opacity: 1; }
+          55%  { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+          100% { transform: translate(-50%,-50%) scale(1.05); opacity: 0; }
+        }
       `}</style>
 
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
@@ -377,23 +465,35 @@ export default function Feed() {
           <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {post.postType === "video" ? (
               <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
-                style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
+                onClick={handleMediaClick}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain", cursor: "pointer" }}
                 autoPlay loop playsInline muted={muted} />
             ) : (
               <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
-                style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
+                onClick={handleMediaClick}
+                style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain", cursor: "pointer" }} />
             )}
             {isCarousel && carouselIndex > 0 && (
-              <button onClick={() => setCarouselIndex(c => c - 1)}
+              <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c - 1); }}
                 style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 2L4 7l5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             )}
             {isCarousel && carouselIndex < allMedia.length - 1 && (
-              <button onClick={() => setCarouselIndex(c => c + 1)}
+              <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c + 1); }}
                 style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
+            )}
+            {/* Cuore animato del doppio click */}
+            {showHeartBurst && (
+              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 18, pointerEvents: "none", animation: "zz-heart-burst 800ms ease-out forwards" }}>
+                <svg width="120" height="120" viewBox="0 0 20 20" fill="#FF4D4D" stroke="#fff" strokeWidth="0.6" style={{ filter: "drop-shadow(0 4px 16px rgba(255,77,77,.6))" }}>
+                  <path d="M10 17S4 13.5 4 8a4.5 4.5 0 0 1 6-4.24A4.5 4.5 0 0 1 16 8C16 13.5 10 17 10 17z" />
+                </svg>
+              </div>
             )}
           </div>
         )}
@@ -564,6 +664,20 @@ export default function Feed() {
           </div>
         )}
       </div>
+
+      {/* Progress bar video */}
+      {post.postType === "video" && currentMedia && (
+        <div className="zz-progress"
+          ref={progressBarRef}
+          onMouseDown={handleSeekStart}
+          onTouchStart={handleSeekStart}
+          style={{ position: "absolute", left: 12, right: 12, bottom: 78, zIndex: 28, height: 16, display: "flex", alignItems: "center", cursor: "pointer", touchAction: "none" }}>
+          <div style={{ position: "relative", width: "100%", height: 3, borderRadius: 2, background: "rgba(255,255,255,.25)", overflow: "visible" }}>
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: "#fff", borderRadius: 2, transition: isSeeking ? "none" : "width .1s linear" }} />
+            <div style={{ position: "absolute", left: `${progress * 100}%`, top: "50%", transform: "translate(-50%,-50%)", width: isSeeking ? 14 : 10, height: isSeeking ? 14 : 10, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.5)", transition: "width .15s, height .15s" }} />
+          </div>
+        </div>
+      )}
 
       {/* Navbar mobile bottom */}
       <div className="zz-mobile" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, display: "flex", alignItems: "center", justifyContent: "space-around", padding: "10px 16px 28px", background: "rgba(0,0,0,.88)", borderTop: "0.5px solid rgba(255,255,255,.08)" }}>
