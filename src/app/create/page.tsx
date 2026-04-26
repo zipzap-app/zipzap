@@ -50,6 +50,7 @@ type TextElement = {
   link: string;
   startMs?: number;
   endMs?: number;
+  _v?: number; // versione del formato: 2 = (x,y) sono il centro del testo
 };
 
 function TextOverlayEditor({
@@ -97,43 +98,32 @@ function TextOverlayEditor({
     };
   }
 
-  // Clampa una posizione (top-left in % del canvas) dentro l'area del media,
-  // tenendo conto della dimensione effettiva del testo se passata.
+  // Clampa una posizione (centro del testo in % del canvas) dentro l'area del media
   function clampToMedia(x: number, y: number, textPx?: { w: number; h: number }) {
     const b = getMediaBounds();
     if (!b) return { x, y };
-    const tWpct = textPx ? (textPx.w / b.canvasW) * 100 : 0;
-    const tHpct = textPx ? (textPx.h / b.canvasH) * 100 : 0;
-    const minX = b.leftPct;
-    const minY = b.topPct;
-    const maxX = b.leftPct + b.widthPct - tWpct;
-    const maxY = b.topPct + b.heightPct - tHpct;
+    const halfWpct = textPx ? (textPx.w / b.canvasW) * 50 : 0;
+    const halfHpct = textPx ? (textPx.h / b.canvasH) * 50 : 0;
+    const minX = b.leftPct + halfWpct;
+    const minY = b.topPct + halfHpct;
+    const maxX = b.leftPct + b.widthPct - halfWpct;
+    const maxY = b.topPct + b.heightPct - halfHpct;
     return {
       x: Math.max(minX, Math.min(maxX, x)),
       y: Math.max(minY, Math.min(maxY, y)),
     };
   }
 
-  // Snap del centro del testo al centro del media, con tolleranza ±2%
-  function snapToCenter(x: number, y: number, textPx: { w: number; h: number }) {
+  // Snap del centro del testo (= x,y) al centro del media, con tolleranza ±2%
+  function snapToCenter(x: number, y: number, _textPx: { w: number; h: number }) {
     const b = getMediaBounds();
     if (!b) return { x, y, snapX: false, snapY: false };
     const tol = 2;
-    const tWpct = (textPx.w / b.canvasW) * 100;
-    const tHpct = (textPx.h / b.canvasH) * 100;
-    const tCenterX = x + tWpct / 2;
-    const tCenterY = y + tHpct / 2;
     const mCenterX = b.leftPct + b.widthPct / 2;
     const mCenterY = b.topPct + b.heightPct / 2;
     let snapX = false, snapY = false;
-    if (Math.abs(tCenterX - mCenterX) < tol) {
-      x = mCenterX - tWpct / 2;
-      snapX = true;
-    }
-    if (Math.abs(tCenterY - mCenterY) < tol) {
-      y = mCenterY - tHpct / 2;
-      snapY = true;
-    }
+    if (Math.abs(x - mCenterX) < tol) { x = mCenterX; snapX = true; }
+    if (Math.abs(y - mCenterY) < tol) { y = mCenterY; snapY = true; }
     return { x, y, snapX, snapY };
   }
 
@@ -143,32 +133,47 @@ function TextOverlayEditor({
     return { w: el.offsetWidth, h: el.offsetHeight };
   }
 
-  // Normalizza i testi: se c'è un video e mancano startMs/endMs, riempi con i default
+  // Normalizza i testi: migra legacy (top-left → centro) e aggiunge default startMs/endMs
   useEffect(() => {
-    if (!isVideo || videoDurationMs === 0) return;
+    if (isVideo && videoDurationMs === 0) return;
+    const b = getMediaBounds();
+    if (!b) return;
     let needsUpdate = false;
     const updated = elements.map(el => {
-      if (el.startMs === undefined || el.endMs === undefined) {
-        needsUpdate = true;
-        return {
-          ...el,
-          startMs: el.startMs ?? 0,
-          endMs: el.endMs ?? videoDurationMs,
-        };
+      const e = { ...el };
+      let changed = false;
+      // Migrazione formato: se _v non è 2, x/y erano top-left → li sposto al centro del testo
+      if (e._v !== 2) {
+        const textPx = getTextPx(e.id);
+        if (textPx.w > 0) {
+          const dxPct = (textPx.w / b.canvasW) * 50;
+          const dyPct = (textPx.h / b.canvasH) * 50;
+          e.x = e.x + dxPct;
+          e.y = e.y + dyPct;
+          e._v = 2;
+          changed = true;
+        }
       }
-      return el;
+      // Default temporali per video
+      if (isVideo && (e.startMs === undefined || e.endMs === undefined)) {
+        e.startMs = e.startMs ?? 0;
+        e.endMs = e.endMs ?? videoDurationMs;
+        changed = true;
+      }
+      if (changed) needsUpdate = true;
+      return e;
     });
     if (needsUpdate) setElements(updated);
   }, [isVideo, videoDurationMs]);
 
   function addText() {
-    // Default position: centro del media se misurabile, altrimenti 30/40 del canvas (fallback)
+    // Default position: centro esatto del media (coordinate = centro del testo)
     const b = getMediaBounds();
-    let defaultX = 30;
-    let defaultY = 40;
+    let defaultX = 50;
+    let defaultY = 50;
     if (b) {
-      defaultX = b.leftPct + b.widthPct / 2 - 5; // ~10% larghezza testo / 2
-      defaultY = b.topPct + b.heightPct / 2 - 2;
+      defaultX = b.leftPct + b.widthPct / 2;
+      defaultY = b.topPct + b.heightPct / 2;
     }
     const newEl: TextElement = {
       id: Date.now().toString(),
@@ -183,6 +188,7 @@ function TextOverlayEditor({
       link: "",
       startMs: 0,
       endMs: isVideo && videoDurationMs > 0 ? videoDurationMs : 999999,
+      _v: 2,
     };
     setElements([...elements, newEl]);
     setSelected(newEl.id);
@@ -417,6 +423,7 @@ function TextOverlayEditor({
                 position: "absolute",
                 left: `${el.x}%`,
                 top: `${el.y}%`,
+                transform: el._v === 2 ? "translate(-50%, -50%)" : undefined,
                 cursor: "move",
                 userSelect: "none",
                 outline: isSelected ? "2px solid #FF4D4D" : "none",
@@ -466,13 +473,24 @@ function TextOverlayEditor({
         })}
 
         {/* Toolbar fluttuante (segue il testo selezionato) */}
-        {selectedEl && !editing && (
+        {selectedEl && !editing && (() => {
+          const txtPx = getTextPx(selectedEl.id);
+          const halfH = txtPx.h / 2;
+          const isV2 = selectedEl._v === 2;
+          const transformStr = isV2
+            ? (toolbarFlipBelow
+                ? `translate(-50%, calc(${halfH}px + 14px))`
+                : `translate(-50%, calc(-100% - ${halfH}px - 14px))`)
+            : (toolbarFlipBelow
+                ? "translate(-50%, calc(100% + 14px))"
+                : "translate(-50%, calc(-100% - 14px))");
+          return (
           <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
             style={{
               position: "absolute",
               left: `${selectedEl.x}%`,
               top: `${selectedEl.y}%`,
-              transform: toolbarFlipBelow ? "translate(-50%, calc(100% + 14px))" : "translate(-50%, calc(-100% - 14px))",
+              transform: transformStr,
               zIndex: 50,
               background: "rgba(20,20,20,.96)",
               backdropFilter: "blur(12px)",
@@ -529,7 +547,8 @@ function TextOverlayEditor({
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Linee guida del centro (visibili solo durante lo snap) */}
         {(centerSnap.x || centerSnap.y) && (() => {
@@ -941,7 +960,7 @@ export default function Create() {
                 {textElements.map(el => {
                   const fontObj = FONTS.find(f => f.id === el.font);
                   return (
-                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
+                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
                       <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                         {el.text}
                       </span>
@@ -985,7 +1004,7 @@ export default function Create() {
                   {textElements.map(el => {
                     const fontObj = FONTS.find(f => f.id === el.font);
                     return (
-                      <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
+                      <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
                         <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                           {el.text}
                         </span>
