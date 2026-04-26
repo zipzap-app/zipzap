@@ -23,6 +23,17 @@ const FONTS = [
 
 const COLORS = ["#ffffff", "#000000", "#FF4D4D", "#FFD700", "#4dffb8", "#60a5fa", "#f472b6", "#fb923c"];
 
+const BG_OPACITIES = [0.3, 0.6, 0.9];
+
+function hexToRgba(hex: string, alpha: number) {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function formatDuration(s: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
@@ -51,7 +62,27 @@ type TextElement = {
   startMs?: number;
   endMs?: number;
   _v?: number; // versione del formato: 2 = (x,y) sono il centro del testo
+  photoIndex?: number; // per caroselli foto: indice della foto a cui appartiene
+  bgColor?: string;    // colore sfondo (default #000000)
+  bgOpacity?: number;  // opacità sfondo (0.3 / 0.6 / 0.9)
+  borderColor?: string; // se presente, ha bordo invece di sfondo
 };
+
+// Calcola lo stato visivo del testo (none / bg / border) e gli stili
+function getDisplayStyle(el: TextElement) {
+  const hasBorder = !!el.borderColor;
+  const hasBg = !hasBorder && !!el.bg;
+  const bgColor = el.bgColor || "#000000";
+  const bgOpacity = typeof el.bgOpacity === "number" ? el.bgOpacity : 0.55;
+  return {
+    hasBorder,
+    hasBg,
+    bgRgba: hasBg ? hexToRgba(bgColor, bgOpacity) : "transparent",
+    borderCss: hasBorder ? `2px solid ${el.borderColor}` : "none",
+    paddingCss: (hasBg || hasBorder) ? "4px 10px" : "0",
+    state: (hasBorder ? "border" : hasBg ? "bg" : "none") as "none" | "bg" | "border",
+  };
+}
 
 function TextOverlayEditor({
   mediaPreview,
@@ -59,12 +90,18 @@ function TextOverlayEditor({
   elements,
   setElements,
   onClose,
+  photoPreviews,
+  carouselIndex,
+  setCarouselIndex,
 }: {
   mediaPreview: string | null;
   mediaType: "video" | "photo";
   elements: TextElement[];
   setElements: (e: TextElement[]) => void;
   onClose: () => void;
+  photoPreviews?: string[];
+  carouselIndex?: number;
+  setCarouselIndex?: (i: number) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -80,7 +117,17 @@ function TextOverlayEditor({
   const tlDragRef = useRef<{ mode: "left" | "right" | "move"; startX: number; origStartMs: number; origEndMs: number; trackW: number } | null>(null);
 
   const isVideo = mediaType === "video";
-  const selectedEl = elements.find(e => e.id === selected) || null;
+  const isCarousel = !!photoPreviews && photoPreviews.length > 1;
+  const currentPhotoIdx = isCarousel ? (carouselIndex ?? 0) : undefined;
+
+  // Filtra elementi visibili: nei caroselli mostra solo quelli della foto attiva
+  const visibleElements = elements.filter(el => {
+    if (!isCarousel) return true;
+    if (el.photoIndex === undefined) return true; // legacy
+    return el.photoIndex === currentPhotoIdx;
+  });
+
+  const selectedEl = visibleElements.find(e => e.id === selected) || null;
 
   // Geometria: bounding del media (video/img) rispetto al canvas, in percentuali
   function getMediaBounds() {
@@ -167,7 +214,6 @@ function TextOverlayEditor({
   }, [isVideo, videoDurationMs]);
 
   function addText() {
-    // Default position: centro esatto del media (coordinate = centro del testo)
     const b = getMediaBounds();
     let defaultX = 50;
     let defaultY = 50;
@@ -185,10 +231,13 @@ function TextOverlayEditor({
       bold: false, italic: false,
       align: "center",
       bg: true,
+      bgColor: "#000000",
+      bgOpacity: 0.6,
       link: "",
       startMs: 0,
       endMs: isVideo && videoDurationMs > 0 ? videoDurationMs : 999999,
       _v: 2,
+      ...(isCarousel ? { photoIndex: currentPhotoIdx } : {}),
     };
     setElements([...elements, newEl]);
     setSelected(newEl.id);
@@ -406,11 +455,12 @@ function TextOverlayEditor({
         )}
 
         {/* Testi */}
-        {elements.map(el => {
+        {visibleElements.map(el => {
           if (!shouldRender(el)) return null;
           const fontObj = FONTS.find(f => f.id === el.font);
           const isSelected = selected === el.id;
           const dimmed = isVideo && isSelected && !isVisibleAt(el, currentTimeMs) && isPlaying;
+          const ds = getDisplayStyle(el);
           return (
             <div
               key={el.id}
@@ -429,8 +479,9 @@ function TextOverlayEditor({
                 outline: isSelected ? "2px solid #FF4D4D" : "none",
                 outlineOffset: 2,
                 borderRadius: 6,
-                padding: el.bg ? "4px 10px" : 0,
-                background: el.bg ? "rgba(0,0,0,.55)" : "transparent",
+                padding: ds.paddingCss,
+                background: ds.bgRgba,
+                border: ds.borderCss,
                 maxWidth: "70%",
                 opacity: dimmed ? 0.4 : 1,
               }}>
@@ -522,18 +573,35 @@ function TextOverlayEditor({
                 style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.05)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, padding: 0 }}>+</button>
             </div>
 
-            {/* Riga 2: B / I / Aa + colori + cestino */}
+            {/* Riga 2: B / I / Stile + colori testo + cestino */}
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <button onClick={() => updateEl(selectedEl.id, { bold: !selectedEl.bold })}
                 style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.bold ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bold ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.bold ? "#FF4D4D" : "#fff", fontSize: 13, fontWeight: 900, cursor: "pointer" }}>B</button>
               <button onClick={() => updateEl(selectedEl.id, { italic: !selectedEl.italic })}
                 style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.italic ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.italic ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.italic ? "#FF4D4D" : "#fff", fontSize: 13, fontStyle: "italic", cursor: "pointer", fontWeight: 700 }}>I</button>
-              <button onClick={() => updateEl(selectedEl.id, { bg: !selectedEl.bg })}
-                title={selectedEl.bg ? "Rimuovi sfondo" : "Aggiungi sfondo"}
-                style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.bg ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bg ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.bg ? "#FF4D4D" : "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Aa</button>
+              {/* Toggle 3 stati: nessuno → sfondo → bordo */}
+              {(() => {
+                const ds = getDisplayStyle(selectedEl);
+                const cycleStyle = () => {
+                  if (ds.state === "none") {
+                    updateEl(selectedEl.id, { bg: true, borderColor: undefined, bgColor: selectedEl.bgColor || "#000000", bgOpacity: selectedEl.bgOpacity ?? 0.6 });
+                  } else if (ds.state === "bg") {
+                    updateEl(selectedEl.id, { bg: false, borderColor: selectedEl.borderColor || "#FFFFFF" });
+                  } else {
+                    updateEl(selectedEl.id, { bg: false, borderColor: undefined });
+                  }
+                };
+                const label = ds.state === "none" ? "Aa" : ds.state === "bg" ? "▣" : "▢";
+                const title = ds.state === "none" ? "Nessuno" : ds.state === "bg" ? "Sfondo" : "Bordo";
+                return (
+                  <button onClick={cycleStyle} title={title}
+                    style={{ width: 28, height: 28, borderRadius: 7, border: ds.state !== "none" ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: ds.state !== "none" ? "rgba(255,77,77,.15)" : "transparent", color: ds.state !== "none" ? "#FF4D4D" : "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{label}</button>
+                );
+              })()}
               <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.1)", margin: "0 2px" }} />
               {COLORS.map(c => (
                 <button key={c} onClick={() => updateEl(selectedEl.id, { color: c })}
+                  title="Colore testo"
                   style={{
                     width: 20, height: 20, borderRadius: "50%", background: c, cursor: "pointer", padding: 0, flexShrink: 0,
                     border: selectedEl.color === c ? "2px solid #FF4D4D" : "1.5px solid rgba(255,255,255,.2)",
@@ -546,6 +614,57 @@ function TextOverlayEditor({
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#FF4D4D" strokeWidth="1.5"><path d="M2 4h10M5 4V2h4v2M4 4l1 9h4l1-9" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             </div>
+
+            {/* Riga 3 (condizionale): colori sfondo + opacità */}
+            {(() => {
+              const ds = getDisplayStyle(selectedEl);
+              if (ds.state === "bg") {
+                const curBgColor = selectedEl.bgColor || "#000000";
+                const curBgOp = selectedEl.bgOpacity ?? 0.6;
+                return (
+                  <div style={{ display: "flex", gap: 4, alignItems: "center", borderTop: "0.5px solid rgba(255,255,255,.1)", paddingTop: 6 }}>
+                    <span style={{ color: "rgba(255,255,255,.4)", fontSize: 9, fontWeight: 700, marginRight: 2 }}>SFONDO</span>
+                    {COLORS.map(c => (
+                      <button key={c} onClick={() => updateEl(selectedEl.id, { bgColor: c })}
+                        title="Colore sfondo"
+                        style={{
+                          width: 18, height: 18, borderRadius: "50%", background: c, cursor: "pointer", padding: 0, flexShrink: 0,
+                          border: curBgColor === c ? "2px solid #FF4D4D" : "1.5px solid rgba(255,255,255,.2)",
+                        }} />
+                    ))}
+                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,.1)", margin: "0 4px" }} />
+                    {BG_OPACITIES.map(op => (
+                      <button key={op} onClick={() => updateEl(selectedEl.id, { bgOpacity: op })}
+                        title={`Opacità ${Math.round(op * 100)}%`}
+                        style={{
+                          width: 22, height: 18, borderRadius: 4, background: hexToRgba(curBgColor, op), cursor: "pointer", padding: 0, flexShrink: 0,
+                          border: Math.abs(curBgOp - op) < 0.05 ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.2)",
+                          color: "#fff", fontSize: 9, fontWeight: 700,
+                        }}>
+                        {Math.round(op * 100)}
+                      </button>
+                    ))}
+                  </div>
+                );
+              }
+              if (ds.state === "border") {
+                const curBorder = selectedEl.borderColor || "#ffffff";
+                return (
+                  <div style={{ display: "flex", gap: 4, alignItems: "center", borderTop: "0.5px solid rgba(255,255,255,.1)", paddingTop: 6 }}>
+                    <span style={{ color: "rgba(255,255,255,.4)", fontSize: 9, fontWeight: 700, marginRight: 2 }}>BORDO</span>
+                    {COLORS.map(c => (
+                      <button key={c} onClick={() => updateEl(selectedEl.id, { borderColor: c })}
+                        title="Colore bordo"
+                        style={{
+                          width: 18, height: 18, borderRadius: "50%", background: c, cursor: "pointer", padding: 0, flexShrink: 0,
+                          border: curBorder.toLowerCase() === c.toLowerCase() ? "2px solid #FF4D4D" : "1.5px solid rgba(255,255,255,.2)",
+                        }} />
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
           );
         })()}
@@ -585,6 +704,37 @@ function TextOverlayEditor({
             </>
           );
         })()}
+
+        {/* Frecce carosello editor */}
+        {isCarousel && photoPreviews && setCarouselIndex && currentPhotoIdx !== undefined && currentPhotoIdx > 0 && (
+          <button onClick={(e) => { e.stopPropagation(); setSelected(null); setCarouselIndex(currentPhotoIdx - 1); }}
+            style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", zIndex: 25, width: 38, height: 38, borderRadius: "50%", background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,255,255,.25)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 2L4 7l5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        )}
+        {isCarousel && photoPreviews && setCarouselIndex && currentPhotoIdx !== undefined && currentPhotoIdx < photoPreviews.length - 1 && (
+          <button onClick={(e) => { e.stopPropagation(); setSelected(null); setCarouselIndex(currentPhotoIdx + 1); }}
+            style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 25, width: 38, height: 38, borderRadius: "50%", background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,255,255,.25)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        )}
+
+        {/* Indicatori carosello editor */}
+        {isCarousel && photoPreviews && (
+          <div style={{ position: "absolute", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 25, display: "flex", gap: 6, background: "rgba(0,0,0,.5)", padding: "5px 9px", borderRadius: 14 }}>
+            {photoPreviews.map((_, i) => {
+              const textsCount = elements.filter(e => e.photoIndex === i).length;
+              return (
+                <div key={i} onClick={() => { setSelected(null); setCarouselIndex && setCarouselIndex(i); }}
+                  style={{ position: "relative", width: i === currentPhotoIdx ? 22 : 7, height: 7, borderRadius: 4, background: i === currentPhotoIdx ? "#fff" : "rgba(255,255,255,.4)", cursor: "pointer", transition: "all .2s" }}>
+                  {textsCount > 0 && (
+                    <span style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", fontSize: 8, color: "#FF4D4D", fontWeight: 700 }}>•</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Bottone aggiungi testo */}
         <button onClick={(e) => { e.stopPropagation(); addText(); }}
@@ -894,6 +1044,9 @@ export default function Create() {
         elements={textElements}
         setElements={setTextElements}
         onClose={() => setShowTextEditor(false)}
+        photoPreviews={type === "photo" ? photoPreviews : undefined}
+        carouselIndex={type === "photo" ? carouselIndex : undefined}
+        setCarouselIndex={type === "photo" ? setCarouselIndex : undefined}
       />
     );
   }
@@ -959,8 +1112,9 @@ export default function Create() {
                 {/* Preview elementi testo (statica, tutti visibili) */}
                 {textElements.map(el => {
                   const fontObj = FONTS.find(f => f.id === el.font);
+                  const ds = getDisplayStyle(el);
                   return (
-                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
+                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
                       <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                         {el.text}
                       </span>
@@ -1001,10 +1155,13 @@ export default function Create() {
                 <div style={{ borderRadius: 16, overflow: "hidden", height: 280, position: "relative", background: "#000" }}>
                   <img src={photoPreviews[carouselIndex]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
 
-                  {textElements.map(el => {
+                  {textElements
+                    .filter(el => el.photoIndex === undefined || el.photoIndex === carouselIndex)
+                    .map(el => {
                     const fontObj = FONTS.find(f => f.id === el.font);
+                    const ds = getDisplayStyle(el);
                     return (
-                      <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4 }}>
+                      <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
                         <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                           {el.text}
                         </span>

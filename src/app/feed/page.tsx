@@ -10,6 +10,27 @@ const FONT_FAMILIES: Record<string, string> = {
   rounded: "Helvetica Neue, sans-serif",
 };
 
+function hexToRgba(hex: string, alpha: number) {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function getDisplayStyle(el: any) {
+  const hasBorder = !!el.borderColor;
+  const hasBg = !hasBorder && !!el.bg;
+  const bgColor = el.bgColor || "#000000";
+  const bgOpacity = typeof el.bgOpacity === "number" ? el.bgOpacity : 0.55;
+  return {
+    bgRgba: hasBg ? hexToRgba(bgColor, bgOpacity) : "transparent",
+    borderCss: hasBorder ? `2px solid ${el.borderColor}` : "none",
+    paddingCss: (hasBg || hasBorder) ? "4px 8px" : "0",
+  };
+}
+
 type Post = {
   id: string;
   userId: string;
@@ -300,7 +321,7 @@ export default function Feed() {
       setTimeout(() => setShowHeartBurst(false), 800);
     } else {
       clickTimerRef.current = setTimeout(() => {
-        // Singolo click: pausa silenziosa (solo per video)
+        // Singolo click: pausa
         const p = posts[currentRef.current];
         if (p && p.postType === "video" && videoRef.current) {
           if (videoRef.current.paused) {
@@ -312,6 +333,14 @@ export default function Feed() {
             setIsPaused(true);
             if (musicRef.current) musicRef.current.pause();
           }
+        } else if (p && p.postType !== "video") {
+          // Foto / carosello: toggle pausa logica (ferma autoavanzamento + audio)
+          setIsPaused(prev => {
+            const newPaused = !prev;
+            if (newPaused && musicRef.current) musicRef.current.pause();
+            else if (!newPaused && musicRef.current && !muted) musicRef.current.play().catch(() => {});
+            return newPaused;
+          });
         }
         clickTimerRef.current = null;
       }, 250);
@@ -334,6 +363,18 @@ export default function Feed() {
     if (musicRef.current) musicRef.current.volume = volume;
     if (videoRef.current) { videoRef.current.muted = muted; videoRef.current.volume = volume; }
   }, [muted, volume]);
+
+  // Auto-avanzamento carosello foto ogni 3 secondi (se non in pausa)
+  useEffect(() => {
+    const post = posts[current];
+    if (!post || post.postType === "video" || isPaused) return;
+    const allMediaCount = (post.mediaUrls && post.mediaUrls.length > 0) ? post.mediaUrls.length : 1;
+    if (allMediaCount <= 1) return;
+    const id = setInterval(() => {
+      setCarouselIndex(c => (c + 1) % allMediaCount);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [current, posts, isPaused]);
 
   useEffect(() => {
     const post = posts[current];
@@ -526,17 +567,28 @@ export default function Feed() {
           {post.overlayData && post.overlayData.length > 0 ? (
             post.overlayData
               .filter((el: any) => {
-                if (post.postType !== "video") return true;
-                const curMs = progress * (duration || 0) * 1000;
-                const start = typeof el.startMs === "number" ? el.startMs : 0;
-                const end = typeof el.endMs === "number" ? el.endMs : Infinity;
-                return curMs >= start && curMs <= end;
+                // Filtro temporale per video
+                if (post.postType === "video") {
+                  const curMs = progress * (duration || 0) * 1000;
+                  const start = typeof el.startMs === "number" ? el.startMs : 0;
+                  const end = typeof el.endMs === "number" ? el.endMs : Infinity;
+                  return curMs >= start && curMs <= end;
+                }
+                // Filtro foto carosello: testi vincolati a photoIndex
+                if (allMedia.length > 1) {
+                  if (el.photoIndex === undefined) return true; // legacy = sempre visibile
+                  return el.photoIndex === carouselIndex;
+                }
+                return true;
               })
-              .map((el: any) => (
-              <div key={el.id} style={{ position: "absolute", zIndex: 17, left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
-                <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
-              </div>
-            ))
+              .map((el: any) => {
+                const ds = getDisplayStyle(el);
+                return (
+                  <div key={el.id} style={{ position: "absolute", zIndex: 17, left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss, background: ds.bgRgba, border: ds.borderCss, borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
+                    <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
+                  </div>
+                );
+              })
           ) : post.overlayText ? (
             <div style={{ position: "absolute", zIndex: 17, left: 16, right: 16, top: post.overlayPosition === "top" ? 80 : post.overlayPosition === "center" ? "50%" : "auto", bottom: post.overlayPosition === "bottom" ? 24 : "auto", transform: post.overlayPosition === "center" ? "translateY(-50%)" : undefined, background: "rgba(0,0,0,.6)", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center", pointerEvents: "none" }}>
               {post.overlayText}
