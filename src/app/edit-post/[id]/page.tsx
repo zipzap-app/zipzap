@@ -52,176 +52,209 @@ function TextOverlayEditor({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showEditPanel, setShowEditPanel] = useState(false);
   const [editText, setEditText] = useState("");
+
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number; moved: boolean } | null>(null);
   const elementsRef = useRef(elements);
-  const setElementsRef = useRef(setElements);
   elementsRef.current = elements;
-  setElementsRef.current = setElements;
+
+  // Drag state — usato solo via ref per non causare re-render durante il drag
+  const dragState = useRef<{
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    startElemX: number;
+    startElemY: number;
+    moved: boolean;
+  } | null>(null);
 
   const selectedEl = elements.find(e => e.id === selected);
 
+  function updateEl(id: string, changes: Partial<TextElement>) {
+    setElements(elementsRef.current.map(e => e.id === id ? { ...e, ...changes } : e));
+  }
+
   function addText() {
     const newEl: TextElement = {
-      id: Date.now().toString(), text: "Testo",
-      x: 30, y: 40, font: "sans", size: 24, color: "#ffffff",
+      id: Date.now().toString(), text: "Nuovo testo",
+      x: 20, y: 40, font: "sans", size: 24, color: "#ffffff",
       bold: false, italic: false, align: "center", bg: true, link: "",
     };
-    setElementsRef.current([...elementsRef.current, newEl]);
+    setElements([...elementsRef.current, newEl]);
     setSelected(newEl.id);
-    setEditingId(newEl.id);
-    setEditText("Testo");
+    setEditText(newEl.text);
+    setShowEditPanel(true);
   }
 
-  function updateEl(id: string, changes: Partial<TextElement>) {
-    setElementsRef.current(elementsRef.current.map(e => e.id === id ? { ...e, ...changes } : e));
-  }
-
-  function deleteEl(id: string) {
-    setElementsRef.current(elementsRef.current.filter(e => e.id !== id));
-    setSelected(null);
-    setEditingId(null);
-  }
-
-  function startEdit(el: TextElement) {
-    setEditingId(el.id);
+  function openEdit(el: TextElement) {
     setEditText(el.text);
-    setSelected(el.id);
+    setShowEditPanel(true);
   }
 
-  function commitEdit() {
-    if (editingId) {
-      updateEl(editingId, { text: editText });
-    }
-    setEditingId(null);
+  function confirmEdit() {
+    if (selected) updateEl(selected, { text: editText });
+    setShowEditPanel(false);
   }
 
-  function onPointerDown(e: React.PointerEvent, id: string) {
+  function deleteSelected() {
+    if (!selected) return;
+    setElements(elementsRef.current.filter(e => e.id !== selected));
+    setSelected(null);
+    setShowEditPanel(false);
+  }
+
+  // ---- DRAG HANDLERS ----
+  function handleTouchStart(e: React.TouchEvent, id: string) {
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     setSelected(id);
     const el = elementsRef.current.find(el => el.id === id);
     if (!el) return;
-    dragRef.current = { id, startX: e.clientX, startY: e.clientY, elemX: el.x, elemY: el.y, moved: false };
+    const t = e.touches[0];
+    dragState.current = {
+      id, moved: false,
+      startClientX: t.clientX, startClientY: t.clientY,
+      startElemX: el.x, startElemY: el.y,
+    };
   }
 
-  function onPointerMove(e: React.PointerEvent, id: string) {
-    if (!dragRef.current || dragRef.current.id !== id || !canvasRef.current) return;
+  function handleTouchMove(e: React.TouchEvent, id: string) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!dragState.current || dragState.current.id !== id || !canvasRef.current) return;
+    const t = e.touches[0];
     const rect = canvasRef.current.getBoundingClientRect();
-    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
-    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) dragRef.current.moved = true;
-    const newX = Math.max(0, Math.min(88, dragRef.current.elemX + dx));
-    const newY = Math.max(0, Math.min(88, dragRef.current.elemY + dy));
-    setElementsRef.current(elementsRef.current.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
+    const dx = ((t.clientX - dragState.current.startClientX) / rect.width) * 100;
+    const dy = ((t.clientY - dragState.current.startClientY) / rect.height) * 100;
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) dragState.current.moved = true;
+    const newX = Math.max(0, Math.min(85, dragState.current.startElemX + dx));
+    const newY = Math.max(0, Math.min(85, dragState.current.startElemY + dy));
+    setElements(elementsRef.current.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
   }
 
-  function onPointerUp(e: React.PointerEvent, id: string) {
-    if (!dragRef.current) return;
-    const wasMoved = dragRef.current.moved;
-    dragRef.current = null;
-    // Se non è stato spostato = click = apri editing
+  function handleTouchEnd(e: React.TouchEvent, id: string) {
+    e.stopPropagation();
+    if (!dragState.current) return;
+    const wasMoved = dragState.current.moved;
+    dragState.current = null;
+    // Solo se non è stato spostato → considera tap → apri edit
     if (!wasMoved) {
       const el = elementsRef.current.find(el => el.id === id);
-      if (el) startEdit(el);
+      if (el) openEdit(el);
     }
   }
 
+  function handleMouseDown(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelected(id);
+    const el = elementsRef.current.find(el => el.id === id);
+    if (!el) return;
+    dragState.current = {
+      id, moved: false,
+      startClientX: e.clientX, startClientY: e.clientY,
+      startElemX: el.x, startElemY: el.y,
+    };
+
+    function onMove(ev: MouseEvent) {
+      if (!dragState.current || !canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const dx = ((ev.clientX - dragState.current.startClientX) / rect.width) * 100;
+      const dy = ((ev.clientY - dragState.current.startClientY) / rect.height) * 100;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) dragState.current.moved = true;
+      const newX = Math.max(0, Math.min(85, dragState.current.startElemX + dx));
+      const newY = Math.max(0, Math.min(85, dragState.current.startElemY + dy));
+      setElements(elementsRef.current.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
+    }
+
+    function onUp() {
+      if (!dragState.current) return;
+      const wasMoved = dragState.current.moved;
+      dragState.current = null;
+      if (!wasMoved) {
+        const el = elementsRef.current.find(el => el.id === id);
+        if (el) openEdit(el);
+      }
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0a0a0a", display: "flex", flexDirection: "column" }}>
-      <style>{`body { overflow: hidden; } .overlay-input { background: transparent; border: none; outline: none; text-align: center; width: 100%; min-width: 80px; }`}</style>
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "#000", display: "flex", flexDirection: "column" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "env(safe-area-inset-top, 16px) 20px 14px", paddingTop: "max(env(safe-area-inset-top), 16px)", flexShrink: 0, background: "rgba(0,0,0,.9)", borderBottom: "0.5px solid rgba(255,255,255,.08)" }}>
-        <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: 10, background: "rgba(255,255,255,.1)", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>✕ Annulla</button>
-        <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>✏️ Editor testo</span>
-        <button onClick={() => { commitEdit(); onClose(); }} style={{ padding: "8px 18px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✓ Fatto</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "48px 20px 14px", flexShrink: 0, background: "rgba(0,0,0,.95)" }}>
+        <button onClick={onClose}
+          style={{ padding: "9px 18px", borderRadius: 10, background: "rgba(255,255,255,.1)", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+          Annulla
+        </button>
+        <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>Editor testo</span>
+        <button onClick={onClose}
+          style={{ padding: "9px 18px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+          Fatto
+        </button>
       </div>
 
-      {/* Canvas area */}
-      <div ref={canvasRef}
-        onClick={() => { setSelected(null); setEditingId(null); }}
-        style={{ flex: 1, position: "relative", overflow: "hidden", background: "#000", touchAction: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {/* Canvas */}
+      <div
+        ref={canvasRef}
+        onClick={() => setSelected(null)}
+        style={{ flex: 1, position: "relative", overflow: "hidden", touchAction: "none", background: "#111" }}>
 
         {mediaPreview && mediaType === "video" && (
-          <video src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />
+          <video src={mediaPreview} style={{ width: "100%", height: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />
         )}
         {mediaPreview && mediaType === "photo" && (
-          <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} alt="" />
+          <img src={mediaPreview} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="" />
         )}
         {!mediaPreview && (
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0030, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "rgba(255,255,255,.15)", fontSize: 14 }}>Anteprima post</span>
+            <span style={{ color: "rgba(255,255,255,.2)", fontSize: 13 }}>Anteprima</span>
           </div>
         )}
 
-        {/* Testo hint */}
-        {elements.length === 0 && (
-          <div style={{ position: "absolute", bottom: 80, left: 0, right: 0, textAlign: "center", color: "rgba(255,255,255,.3)", fontSize: 12, pointerEvents: "none" }}>
-            Tocca "＋ Aggiungi testo" per iniziare
-          </div>
-        )}
-
+        {/* Elementi testo */}
         {elements.map(el => {
           const fontObj = FONTS.find(f => f.id === el.font);
-          const isSelected = selected === el.id;
-          const isEditing = editingId === el.id;
-
+          const isSel = selected === el.id;
           return (
             <div
               key={el.id}
-              onPointerDown={(e) => onPointerDown(e, el.id)}
-              onPointerMove={(e) => onPointerMove(e, el.id)}
-              onPointerUp={(e) => onPointerUp(e, el.id)}
               style={{
                 position: "absolute",
                 left: `${el.x}%`, top: `${el.y}%`,
+                zIndex: 10,
                 cursor: "grab",
-                userSelect: "none",
                 touchAction: "none",
-                outline: isSelected ? "2px solid #FF4D4D" : "2px solid transparent",
-                outlineOffset: 4,
-                borderRadius: 8,
+                userSelect: "none",
                 padding: el.bg ? "5px 10px" : "5px 2px",
                 background: el.bg ? "rgba(0,0,0,.6)" : "transparent",
-                zIndex: 10,
-                minWidth: 40,
+                borderRadius: 8,
+                outline: isSel ? "2px solid #FF4D4D" : "2px solid transparent",
+                outlineOffset: 3,
+              }}
+              onMouseDown={(e) => handleMouseDown(e, el.id)}
+              onTouchStart={(e) => handleTouchStart(e, el.id)}
+              onTouchMove={(e) => handleTouchMove(e, el.id)}
+              onTouchEnd={(e) => handleTouchEnd(e, el.id)}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span style={{
+                color: el.color,
+                fontFamily: fontObj?.family,
+                fontSize: el.size,
+                fontWeight: el.bold ? 700 : 400,
+                fontStyle: el.italic ? "italic" : "normal",
+                display: "block",
+                whiteSpace: "nowrap",
               }}>
-              {isEditing ? (
-                <input
-                  autoFocus
-                  value={editText}
-                  onChange={e => setEditText(e.target.value)}
-                  onBlur={commitEdit}
-                  onKeyDown={e => { if (e.key === "Enter") { commitEdit(); } e.stopPropagation(); }}
-                  onClick={e => e.stopPropagation()}
-                  className="overlay-input"
-                  style={{
-                    color: el.color,
-                    fontFamily: fontObj?.family,
-                    fontSize: el.size,
-                    fontWeight: el.bold ? 700 : 400,
-                    fontStyle: el.italic ? "italic" : "normal",
-                    minWidth: Math.max(80, editText.length * el.size * 0.55),
-                  }}
-                />
-              ) : (
-                <span style={{
-                  color: el.color,
-                  fontFamily: fontObj?.family,
-                  fontSize: el.size,
-                  fontWeight: el.bold ? 700 : 400,
-                  fontStyle: el.italic ? "italic" : "normal",
-                  display: "block",
-                  whiteSpace: "nowrap",
-                  textAlign: el.align,
-                }}>
-                  {el.text || "Testo"}
-                </span>
-              )}
-              {el.link && <div style={{ fontSize: 9, color: "#60a5fa", marginTop: 1 }}>🔗</div>}
+                {el.text || "Testo"}
+              </span>
             </div>
           );
         })}
@@ -230,40 +263,39 @@ function TextOverlayEditor({
         <button
           onClick={(e) => { e.stopPropagation(); addText(); }}
           style={{
-            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-            padding: "11px 24px", borderRadius: 24,
-            background: "rgba(255,255,255,.18)", backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,.35)",
+            position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)",
+            padding: "11px 28px", borderRadius: 24,
+            background: "rgba(255,255,255,.15)", backdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,.3)",
             color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", zIndex: 20,
           }}>
-          ＋ Aggiungi testo
+          + Aggiungi testo
         </button>
       </div>
 
-      {/* Pannello controlli elemento selezionato */}
-      {selectedEl && !editingId && (
-        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "14px 16px 28px", flexShrink: 0, maxHeight: "42vh", overflowY: "auto" }}>
+      {/* Toolbar elemento selezionato */}
+      {selectedEl && !showEditPanel && (
+        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "12px 16px 28px", flexShrink: 0, maxHeight: "44vh", overflowY: "auto" }}>
 
-          {/* Hint */}
-          <div style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center", marginBottom: 14 }}>
-            Tocca il testo per modificarlo · Trascina per spostarlo
+          <div style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center", marginBottom: 12 }}>
+            Trascina il testo per spostarlo
           </div>
 
-          {/* Azioni rapide */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <button onClick={() => startEdit(selectedEl)}
-              style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "rgba(255,77,77,.15)", border: "1px solid rgba(255,77,77,.4)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+          {/* Modifica testo + elimina */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <button onClick={() => openEdit(selectedEl)}
+              style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: "rgba(255,77,77,.15)", border: "1.5px solid rgba(255,77,77,.4)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
               ✏️ Modifica testo
             </button>
-            <button onClick={() => deleteEl(selectedEl.id)}
-              style={{ padding: "10px 16px", borderRadius: 10, background: "rgba(255,50,50,.08)", border: "1px solid rgba(255,50,50,.2)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+            <button onClick={deleteSelected}
+              style={{ padding: "11px 18px", borderRadius: 12, background: "rgba(255,50,50,.08)", border: "1px solid rgba(255,50,50,.2)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
               🗑
             </button>
           </div>
 
           {/* Font */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Font</div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Font</div>
             <div style={{ display: "flex", gap: 6 }}>
               {FONTS.map(f => (
                 <button key={f.id} onClick={() => updateEl(selectedEl.id, { font: f.id })}
@@ -275,8 +307,8 @@ function TextOverlayEditor({
           </div>
 
           {/* Dimensione */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}>
               <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px" }}>Dimensione</div>
               <span style={{ color: "#FF4D4D", fontSize: 12, fontWeight: 700 }}>{selectedEl.size}px</span>
             </div>
@@ -284,45 +316,34 @@ function TextOverlayEditor({
           </div>
 
           {/* Stile */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Stile</div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Stile</div>
             <div style={{ display: "flex", gap: 6 }}>
-              {[
-                { key: "bold", label: "B", style: { fontWeight: 900 } },
-                { key: "italic", label: "I", style: { fontStyle: "italic" } },
-              ].map(({ key, label, style }) => (
-                <button key={key} onClick={() => updateEl(selectedEl.id, { [key]: !(selectedEl as any)[key] })}
-                  style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: (selectedEl as any)[key] ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: (selectedEl as any)[key] ? "rgba(255,77,77,.12)" : "transparent", color: (selectedEl as any)[key] ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 15, cursor: "pointer", ...style }}>
-                  {label}
-                </button>
-              ))}
+              <button onClick={() => updateEl(selectedEl.id, { bold: !selectedEl.bold })}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: selectedEl.bold ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bold ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.bold ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 15, fontWeight: 900, cursor: "pointer" }}>B</button>
+              <button onClick={() => updateEl(selectedEl.id, { italic: !selectedEl.italic })}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: selectedEl.italic ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.italic ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.italic ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 15, fontStyle: "italic", cursor: "pointer" }}>I</button>
               <button onClick={() => updateEl(selectedEl.id, { bg: !selectedEl.bg })}
                 style={{ flex: 2, padding: "9px 0", borderRadius: 10, border: selectedEl.bg ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bg ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.bg ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 12, cursor: "pointer" }}>
                 Sfondo
               </button>
-              {(["left", "center", "right"] as const).map(a => (
-                <button key={a} onClick={() => updateEl(selectedEl.id, { align: a })}
-                  style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: selectedEl.align === a ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.align === a ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.align === a ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 13, cursor: "pointer" }}>
-                  {a === "left" ? "◀" : a === "center" ? "≡" : "▶"}
-                </button>
-              ))}
             </div>
           </div>
 
           {/* Colore */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Colore</div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Colore</div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {COLORS_TEXT.map(c => (
                 <button key={c} onClick={() => updateEl(selectedEl.id, { color: c })}
-                  style={{ width: 34, height: 34, borderRadius: "50%", background: c, border: selectedEl.color === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.15)", cursor: "pointer", flexShrink: 0 }} />
+                  style={{ width: 34, height: 34, borderRadius: "50%", background: c, border: selectedEl.color === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.15)", cursor: "pointer" }} />
               ))}
             </div>
           </div>
 
           {/* Posizione rapida */}
           <div>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Posizione rapida</div>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 7 }}>Posizione rapida</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {[
                 { label: "↖", x: 5, y: 8 }, { label: "↑", x: 38, y: 8 }, { label: "↗", x: 68, y: 8 },
@@ -339,22 +360,25 @@ function TextOverlayEditor({
         </div>
       )}
 
-      {/* Pannello editing testo */}
-      {editingId && (
-        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "16px 20px 28px", flexShrink: 0 }}>
-          <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginBottom: 10 }}>Modifica testo — premi Invio o tocca fuori per confermare</div>
+      {/* Pannello modifica testo */}
+      {showEditPanel && (
+        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "16px 20px 32px", flexShrink: 0 }}>
+          <div style={{ color: "rgba(255,255,255,.5)", fontSize: 12, marginBottom: 10 }}>Modifica testo</div>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               autoFocus
               value={editText}
               onChange={e => setEditText(e.target.value)}
-              onBlur={commitEdit}
-              onKeyDown={e => { if (e.key === "Enter") commitEdit(); }}
-              placeholder="Scrivi qui..."
-              style={{ flex: 1, padding: "12px 16px", borderRadius: 12, background: "#1a1a1a", border: "1.5px solid #FF4D4D", color: "#fff", fontSize: 16, outline: "none" }}
+              onKeyDown={e => { if (e.key === "Enter") confirmEdit(); }}
+              placeholder="Scrivi il testo..."
+              style={{
+                flex: 1, padding: "13px 16px", borderRadius: 14,
+                background: "#1a1a1a", border: "1.5px solid #FF4D4D",
+                color: "#fff", fontSize: 16, outline: "none",
+              }}
             />
-            <button onClick={commitEdit}
-              style={{ padding: "12px 20px", borderRadius: 12, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+            <button onClick={confirmEdit}
+              style={{ padding: "13px 20px", borderRadius: 14, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
               OK
             </button>
           </div>
@@ -483,12 +507,8 @@ export default function EditPost() {
     }
 
     const updateObj: Record<string, any> = {
-      caption,
-      link_url: linkUrl || null,
-      visibility,
-      music_title: musicTitle,
-      music_artist: musicArtist,
-      music_url: musicUrl,
+      caption, link_url: linkUrl || null, visibility,
+      music_title: musicTitle, music_artist: musicArtist, music_url: musicUrl,
     };
 
     if (textElements.length > 0) {
@@ -503,11 +523,7 @@ export default function EditPost() {
 
     const { error } = await supabase.from("posts").update(updateObj).eq("id", postId).select().single();
 
-    if (error) {
-      setSaveError(`Errore: ${error.message}`);
-      setSaving(false);
-      return;
-    }
+    if (error) { setSaveError(`Errore: ${error.message}`); setSaving(false); return; }
 
     setSaving(false);
     setSaved(true);
