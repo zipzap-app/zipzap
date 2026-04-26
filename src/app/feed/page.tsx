@@ -3,6 +3,13 @@ import { useState, useEffect, useRef } from "react";
 import Comments from "@/components/Comments";
 import { createClient } from "@/lib/supabase/client";
 
+const FONT_FAMILIES: Record<string, string> = {
+  sans: "-apple-system, sans-serif",
+  serif: "Georgia, serif",
+  mono: "monospace",
+  rounded: "Helvetica Neue, sans-serif",
+};
+
 type Post = {
   id: string;
   userId: string;
@@ -25,12 +32,13 @@ type Post = {
   musicArtist: string | null;
   overlayText: string | null;
   overlayPosition: string;
+  overlayData: any[] | null;
   visibility: string;
 };
 
 const mockPosts: Post[] = [
-  { id: "1", userId: "user-1", user: "astro.sky", initials: "AS", color: "#1a3a5c", caption: "Via Lattea dal Gran Sasso — 4 ore di esposizione", likes: 41200, comments: 3100, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", visibility: "public" },
-  { id: "2", userId: "user-2", user: "vale.beats", initials: "VB", color: "#3d0a2e", caption: "Beat fatta in 60 secondi con samples di cucina", likes: 98000, comments: 14000, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", visibility: "public" },
+  { id: "1", userId: "user-1", user: "astro.sky", initials: "AS", color: "#1a3a5c", caption: "Via Lattea dal Gran Sasso — 4 ore di esposizione", likes: 41200, comments: 3100, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
+  { id: "2", userId: "user-2", user: "vale.beats", initials: "VB", color: "#3d0a2e", caption: "Beat fatta in 60 secondi con samples di cucina", likes: 98000, comments: 14000, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
 ];
 
 const colors = ["#1a3a5c", "#0d3320", "#3d0a2e", "#2a1a4a", "#1a2a0a", "#4a1a0a"];
@@ -111,6 +119,7 @@ export default function Feed() {
       musicArtist: p.music_artist || null,
       overlayText: p.overlay_text || null,
       overlayPosition: p.overlay_position || "bottom",
+      overlayData: Array.isArray(p.overlay_data) && p.overlay_data.length > 0 ? p.overlay_data : null,
       visibility: p.visibility || "public",
     };
   }
@@ -120,8 +129,6 @@ export default function Feed() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
-
-        // Leggi postId dall'URL per navigare al post giusto
         const targetPostId = new URLSearchParams(window.location.search).get("postId");
 
         if (user) {
@@ -142,12 +149,9 @@ export default function Feed() {
             });
             const mapped = filtered.map(mapPost);
             setAllPosts(mapped);
-
-            // Naviga al post giusto se arrivato dal profilo
             if (targetPostId) {
               const idx = mapped.findIndex(p => p.id === targetPostId);
               if (idx > -1) setCurrent(idx);
-              // Pulisci URL senza ricaricare la pagina
               window.history.replaceState({}, "", "/feed");
             }
           } else {
@@ -351,7 +355,29 @@ export default function Feed() {
 
       <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
 
-      {post.overlayText && (
+      {/* Overlay testo — custom (overlay_data) o posizione fissa (overlay_text) */}
+      {post.overlayData && post.overlayData.length > 0 ? (
+        post.overlayData.map((el: any) => (
+          <div key={el.id} style={{
+            position: "absolute", zIndex: 15,
+            left: `${el.x}%`, top: `${el.y}%`,
+            padding: el.bg ? "4px 8px" : 0,
+            background: el.bg ? "rgba(0,0,0,.55)" : "transparent",
+            borderRadius: 6, pointerEvents: "none", maxWidth: "70%",
+          }}>
+            <span style={{
+              color: el.color || "#fff",
+              fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif",
+              fontSize: el.size || 20,
+              fontWeight: el.bold ? 700 : 400,
+              fontStyle: el.italic ? "italic" : "normal",
+              display: "block", whiteSpace: "nowrap",
+            }}>
+              {el.text}
+            </span>
+          </div>
+        ))
+      ) : post.overlayText ? (
         <div style={{
           position: "absolute", zIndex: 15, left: 16, right: 70,
           top: post.overlayPosition === "top" ? 100 : post.overlayPosition === "center" ? "50%" : "auto",
@@ -363,7 +389,7 @@ export default function Feed() {
         }}>
           {post.overlayText}
         </div>
-      )}
+      ) : null}
 
       {isCarousel && (
         <div style={{ position: "absolute", top: 100, left: "50%", transform: "translateX(-50%)", zIndex: 15, display: "flex", gap: 6 }}>
