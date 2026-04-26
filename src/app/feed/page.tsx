@@ -51,12 +51,12 @@ function formatCount(n: number) {
 
 function NavDesktop({ active, unread }: { active?: string; unread?: number }) {
   return (
-    <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.85)", borderRight: "0.5px solid rgba(255,255,255,.08)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 9, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
+    <div className="zz-desktop" style={{ position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 40, width: 220, flexDirection: "column", gap: 6, padding: "32px 20px", background: "rgba(10,10,10,.95)", borderRight: "0.5px solid rgba(255,255,255,.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
         </div>
-        <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
+        <span style={{ color: "#fff", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
       </div>
       {[
         { label: "Home", href: "/feed" },
@@ -66,7 +66,7 @@ function NavDesktop({ active, unread }: { active?: string; unread?: number }) {
         { label: "Zap Store", href: "/store", isStore: true },
         { label: "Profilo", href: "/profile" },
       ].map(item => (
-        <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, background: active === item.href ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: (item as any).isStore ? "#FF4D4D" : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13 }}>
+        <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: active === item.href ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: (item as any).isStore ? "#FF4D4D" : "rgba(255,255,255,.8)", fontWeight: 600, fontSize: 14 }}>
           {item.label}
           {(item as any).badge > 0 && (
             <span style={{ marginLeft: "auto", background: "#FF4D4D", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>
@@ -75,7 +75,7 @@ function NavDesktop({ active, unread }: { active?: string; unread?: number }) {
           )}
         </a>
       ))}
-      <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 13, marginTop: 8 }}>
+      <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 14, marginTop: 8 }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M7 1v12M1 7h12" strokeLinecap="round" /></svg>
         Crea contenuto
       </a>
@@ -334,7 +334,7 @@ export default function Feed() {
   if (feedTab === "seguiti" && !loadingFollowed && followedPosts.length === 0) {
     return (
       <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
-        <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-mobile { display: none !important; } }`}</style>
+        <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-desktop { display: flex !important; } .zz-mobile { display: none !important; } }`}</style>
         <NavDesktop active="/feed" unread={unreadNotifs} />
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
           <p style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>Nessun post dai seguiti</p>
@@ -357,12 +357,14 @@ export default function Feed() {
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
       <style>{`
+        .zz-desktop { display: none; }
         @media (max-width: 768px) { .zz-desktop { display: none !important; } }
         @media (min-width: 769px) {
+          .zz-desktop { display: flex !important; }
           .zz-mobile { display: none !important; }
           .zz-video-area { left: 220px !important; right: 72px !important; }
           .zz-post-nav { display: flex !important; }
-          .zz-info { left: 216px !important; }
+          .zz-info { left: 236px !important; }
         }
         .zz-post-nav { display: none; }
       `}</style>
