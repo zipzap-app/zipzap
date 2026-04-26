@@ -52,9 +52,10 @@ function TextOverlayEditor({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number } | null>(null);
+  const dragRef = useRef<{ id: string; startX: number; startY: number; elemX: number; elemY: number; moved: boolean } | null>(null);
   const elementsRef = useRef(elements);
   const setElementsRef = useRef(setElements);
   elementsRef.current = elements;
@@ -65,12 +66,13 @@ function TextOverlayEditor({
   function addText() {
     const newEl: TextElement = {
       id: Date.now().toString(), text: "Testo",
-      x: 30, y: 40, font: "sans", size: 20, color: "#ffffff",
+      x: 30, y: 40, font: "sans", size: 24, color: "#ffffff",
       bold: false, italic: false, align: "center", bg: true, link: "",
     };
     setElementsRef.current([...elementsRef.current, newEl]);
     setSelected(newEl.id);
-    setEditing(true);
+    setEditingId(newEl.id);
+    setEditText("Testo");
   }
 
   function updateEl(id: string, changes: Partial<TextElement>) {
@@ -80,185 +82,282 @@ function TextOverlayEditor({
   function deleteEl(id: string) {
     setElementsRef.current(elementsRef.current.filter(e => e.id !== id));
     setSelected(null);
+    setEditingId(null);
   }
 
-  function onMouseDown(e: React.MouseEvent, id: string) {
-    e.stopPropagation(); e.preventDefault();
-    setSelected(id);
-    const el = elementsRef.current.find(el => el.id === id);
-    if (!el) return;
-    dragRef.current = { id, startX: e.clientX, startY: e.clientY, elemX: el.x, elemY: el.y };
-    function onMouseMove(ev: MouseEvent) {
-      if (!dragRef.current || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const dx = ((ev.clientX - dragRef.current.startX) / rect.width) * 100;
-      const dy = ((ev.clientY - dragRef.current.startY) / rect.height) * 100;
-      const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
-      const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElementsRef.current(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
-    }
-    function onMouseUp() {
-      dragRef.current = null;
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    }
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+  function startEdit(el: TextElement) {
+    setEditingId(el.id);
+    setEditText(el.text);
+    setSelected(el.id);
   }
 
-  function onTouchStart(e: React.TouchEvent, id: string) {
+  function commitEdit() {
+    if (editingId) {
+      updateEl(editingId, { text: editText });
+    }
+    setEditingId(null);
+  }
+
+  function onPointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
     setSelected(id);
     const el = elementsRef.current.find(el => el.id === id);
     if (!el) return;
-    const touch = e.touches[0];
-    dragRef.current = { id, startX: touch.clientX, startY: touch.clientY, elemX: el.x, elemY: el.y };
-    function onTouchMove(ev: TouchEvent) {
-      ev.preventDefault();
-      if (!dragRef.current || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const t = ev.touches[0];
-      const dx = ((t.clientX - dragRef.current.startX) / rect.width) * 100;
-      const dy = ((t.clientY - dragRef.current.startY) / rect.height) * 100;
-      const newX = Math.max(0, Math.min(90, dragRef.current.elemX + dx));
-      const newY = Math.max(0, Math.min(90, dragRef.current.elemY + dy));
-      setElementsRef.current(elementsRef.current.map(el => el.id === dragRef.current!.id ? { ...el, x: newX, y: newY } : el));
+    dragRef.current = { id, startX: e.clientX, startY: e.clientY, elemX: el.x, elemY: el.y, moved: false };
+  }
+
+  function onPointerMove(e: React.PointerEvent, id: string) {
+    if (!dragRef.current || dragRef.current.id !== id || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) dragRef.current.moved = true;
+    const newX = Math.max(0, Math.min(88, dragRef.current.elemX + dx));
+    const newY = Math.max(0, Math.min(88, dragRef.current.elemY + dy));
+    setElementsRef.current(elementsRef.current.map(el => el.id === id ? { ...el, x: newX, y: newY } : el));
+  }
+
+  function onPointerUp(e: React.PointerEvent, id: string) {
+    if (!dragRef.current) return;
+    const wasMoved = dragRef.current.moved;
+    dragRef.current = null;
+    // Se non è stato spostato = click = apri editing
+    if (!wasMoved) {
+      const el = elementsRef.current.find(el => el.id === id);
+      if (el) startEdit(el);
     }
-    function onTouchEnd() {
-      dragRef.current = null;
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-    }
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd);
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "#000", display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "44px 16px 12px", flexShrink: 0, background: "rgba(0,0,0,.8)" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(255,255,255,.1)", border: "none", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Annulla</button>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>Editor testo</span>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Fatto</button>
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "#0a0a0a", display: "flex", flexDirection: "column" }}>
+      <style>{`body { overflow: hidden; } .overlay-input { background: transparent; border: none; outline: none; text-align: center; width: 100%; min-width: 80px; }`}</style>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "env(safe-area-inset-top, 16px) 20px 14px", paddingTop: "max(env(safe-area-inset-top), 16px)", flexShrink: 0, background: "rgba(0,0,0,.9)", borderBottom: "0.5px solid rgba(255,255,255,.08)" }}>
+        <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: 10, background: "rgba(255,255,255,.1)", border: "none", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>✕ Annulla</button>
+        <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>✏️ Editor testo</span>
+        <button onClick={() => { commitEdit(); onClose(); }} style={{ padding: "8px 18px", borderRadius: 10, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✓ Fatto</button>
       </div>
 
-      <div ref={canvasRef} onClick={(e) => { if (dragRef.current) return; setSelected(null); }}
-        style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}>
-        {mediaPreview && mediaType === "video" && <video src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />}
-        {mediaPreview && mediaType === "photo" && <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />}
+      {/* Canvas area */}
+      <div ref={canvasRef}
+        onClick={() => { setSelected(null); setEditingId(null); }}
+        style={{ flex: 1, position: "relative", overflow: "hidden", background: "#000", touchAction: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+
+        {mediaPreview && mediaType === "video" && (
+          <video src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} muted loop autoPlay playsInline />
+        )}
+        {mediaPreview && mediaType === "photo" && (
+          <img src={mediaPreview} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} alt="" />
+        )}
         {!mediaPreview && (
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0020, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "rgba(255,255,255,.2)", fontSize: 13 }}>Anteprima</span>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0030, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "rgba(255,255,255,.15)", fontSize: 14 }}>Anteprima post</span>
+          </div>
+        )}
+
+        {/* Testo hint */}
+        {elements.length === 0 && (
+          <div style={{ position: "absolute", bottom: 80, left: 0, right: 0, textAlign: "center", color: "rgba(255,255,255,.3)", fontSize: 12, pointerEvents: "none" }}>
+            Tocca "＋ Aggiungi testo" per iniziare
           </div>
         )}
 
         {elements.map(el => {
           const fontObj = FONTS.find(f => f.id === el.font);
+          const isSelected = selected === el.id;
+          const isEditing = editingId === el.id;
+
           return (
-            <div key={el.id}
-              onMouseDown={(e) => onMouseDown(e, el.id)}
-              onTouchStart={(e) => onTouchStart(e, el.id)}
-              onDoubleClick={(e) => { e.stopPropagation(); setSelected(el.id); setEditing(true); }}
-              style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, cursor: "move", userSelect: "none", touchAction: "none", outline: selected === el.id ? "2px solid #FF4D4D" : "none", borderRadius: 6, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", maxWidth: "70%", zIndex: 10 }}>
-              {editing && selected === el.id ? (
-                <input autoFocus value={el.text}
-                  onChange={e => updateEl(el.id, { text: e.target.value })}
-                  onBlur={() => setEditing(false)}
+            <div
+              key={el.id}
+              onPointerDown={(e) => onPointerDown(e, el.id)}
+              onPointerMove={(e) => onPointerMove(e, el.id)}
+              onPointerUp={(e) => onPointerUp(e, el.id)}
+              style={{
+                position: "absolute",
+                left: `${el.x}%`, top: `${el.y}%`,
+                cursor: "grab",
+                userSelect: "none",
+                touchAction: "none",
+                outline: isSelected ? "2px solid #FF4D4D" : "2px solid transparent",
+                outlineOffset: 4,
+                borderRadius: 8,
+                padding: el.bg ? "5px 10px" : "5px 2px",
+                background: el.bg ? "rgba(0,0,0,.6)" : "transparent",
+                zIndex: 10,
+                minWidth: 40,
+              }}>
+              {isEditing ? (
+                <input
+                  autoFocus
+                  value={editText}
+                  onChange={e => setEditText(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={e => { if (e.key === "Enter") { commitEdit(); } e.stopPropagation(); }}
                   onClick={e => e.stopPropagation()}
-                  style={{ background: "transparent", border: "none", outline: "none", color: el.color, fontFamily: fontObj?.family, fontSize: el.size, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", textAlign: el.align, width: Math.max(80, el.text.length * el.size * 0.6), minWidth: 60 }} />
+                  className="overlay-input"
+                  style={{
+                    color: el.color,
+                    fontFamily: fontObj?.family,
+                    fontSize: el.size,
+                    fontWeight: el.bold ? 700 : 400,
+                    fontStyle: el.italic ? "italic" : "normal",
+                    minWidth: Math.max(80, editText.length * el.size * 0.55),
+                  }}
+                />
               ) : (
-                <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", textAlign: el.align, display: "block", whiteSpace: "nowrap" }}>
+                <span style={{
+                  color: el.color,
+                  fontFamily: fontObj?.family,
+                  fontSize: el.size,
+                  fontWeight: el.bold ? 700 : 400,
+                  fontStyle: el.italic ? "italic" : "normal",
+                  display: "block",
+                  whiteSpace: "nowrap",
+                  textAlign: el.align,
+                }}>
                   {el.text || "Testo"}
                 </span>
               )}
-              {el.link && <div style={{ fontSize: 9, color: "#60a5fa", marginTop: 2 }}>🔗 {el.link.slice(0, 20)}...</div>}
+              {el.link && <div style={{ fontSize: 9, color: "#60a5fa", marginTop: 1 }}>🔗</div>}
             </div>
           );
         })}
 
-        <button onClick={(e) => { e.stopPropagation(); addText(); }}
-          style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", padding: "10px 20px", borderRadius: 20, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", zIndex: 20 }}>
-          + Aggiungi testo
+        {/* Bottone aggiungi */}
+        <button
+          onClick={(e) => { e.stopPropagation(); addText(); }}
+          style={{
+            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+            padding: "11px 24px", borderRadius: 24,
+            background: "rgba(255,255,255,.18)", backdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,.35)",
+            color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", zIndex: 20,
+          }}>
+          ＋ Aggiungi testo
         </button>
       </div>
 
-      {selectedEl && (
-        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "12px 16px 32px", flexShrink: 0, maxHeight: "45vh", overflowY: "auto" }}>
-          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, textAlign: "center", marginBottom: 12 }}>Doppio tap per modificare · Trascina per spostare</div>
+      {/* Pannello controlli elemento selezionato */}
+      {selectedEl && !editingId && (
+        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "14px 16px 28px", flexShrink: 0, maxHeight: "42vh", overflowY: "auto" }}>
 
+          {/* Hint */}
+          <div style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center", marginBottom: 14 }}>
+            Tocca il testo per modificarlo · Trascina per spostarlo
+          </div>
+
+          {/* Azioni rapide */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button onClick={() => startEdit(selectedEl)}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "rgba(255,77,77,.15)", border: "1px solid rgba(255,77,77,.4)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              ✏️ Modifica testo
+            </button>
+            <button onClick={() => deleteEl(selectedEl.id)}
+              style={{ padding: "10px 16px", borderRadius: 10, background: "rgba(255,50,50,.08)", border: "1px solid rgba(255,50,50,.2)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              🗑
+            </button>
+          </div>
+
+          {/* Font */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Font</div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Font</div>
+            <div style={{ display: "flex", gap: 6 }}>
               {FONTS.map(f => (
                 <button key={f.id} onClick={() => updateEl(selectedEl.id, { font: f.id })}
-                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.font === f.id ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.font === f.id ? "rgba(255,77,77,.1)" : "rgba(255,255,255,.05)", color: selectedEl.font === f.id ? "#FF4D4D" : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: f.family }}>
+                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.font === f.id ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.font === f.id ? "rgba(255,77,77,.12)" : "rgba(255,255,255,.04)", color: selectedEl.font === f.id ? "#FF4D4D" : "rgba(255,255,255,.7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: f.family }}>
                   {f.label}
                 </button>
               ))}
             </div>
           </div>
 
+          {/* Dimensione */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }}>Dimensione</div>
-              <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>{selectedEl.size}px</span>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px" }}>Dimensione</div>
+              <span style={{ color: "#FF4D4D", fontSize: 12, fontWeight: 700 }}>{selectedEl.size}px</span>
             </div>
-            <input type="range" min="12" max="64" value={selectedEl.size} onChange={e => updateEl(selectedEl.id, { size: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "#FF4D4D" }} />
+            <input type="range" min="14" max="72" value={selectedEl.size} onChange={e => updateEl(selectedEl.id, { size: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "#FF4D4D" }} />
           </div>
 
+          {/* Stile */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Stile</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => updateEl(selectedEl.id, { bold: !selectedEl.bold })}
-                style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.bold ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bold ? "rgba(255,77,77,.1)" : "transparent", color: selectedEl.bold ? "#FF4D4D" : "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer" }}>B</button>
-              <button onClick={() => updateEl(selectedEl.id, { italic: !selectedEl.italic })}
-                style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.italic ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.italic ? "rgba(255,77,77,.1)" : "transparent", color: selectedEl.italic ? "#FF4D4D" : "#fff", fontSize: 14, fontStyle: "italic", cursor: "pointer" }}>I</button>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Stile</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[
+                { key: "bold", label: "B", style: { fontWeight: 900 } },
+                { key: "italic", label: "I", style: { fontStyle: "italic" } },
+              ].map(({ key, label, style }) => (
+                <button key={key} onClick={() => updateEl(selectedEl.id, { [key]: !(selectedEl as any)[key] })}
+                  style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: (selectedEl as any)[key] ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: (selectedEl as any)[key] ? "rgba(255,77,77,.12)" : "transparent", color: (selectedEl as any)[key] ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 15, cursor: "pointer", ...style }}>
+                  {label}
+                </button>
+              ))}
               <button onClick={() => updateEl(selectedEl.id, { bg: !selectedEl.bg })}
-                style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.bg ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bg ? "rgba(255,77,77,.1)" : "transparent", color: selectedEl.bg ? "#FF4D4D" : "#fff", fontSize: 11, cursor: "pointer" }}>Sfondo</button>
+                style={{ flex: 2, padding: "9px 0", borderRadius: 10, border: selectedEl.bg ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.bg ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.bg ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 12, cursor: "pointer" }}>
+                Sfondo
+              </button>
               {(["left", "center", "right"] as const).map(a => (
                 <button key={a} onClick={() => updateEl(selectedEl.id, { align: a })}
-                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: selectedEl.align === a ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.align === a ? "rgba(255,77,77,.1)" : "transparent", color: selectedEl.align === a ? "#FF4D4D" : "#fff", fontSize: 12, cursor: "pointer" }}>
-                  {a === "left" ? "◀" : a === "center" ? "☰" : "▶"}
+                  style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: selectedEl.align === a ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.align === a ? "rgba(255,77,77,.12)" : "transparent", color: selectedEl.align === a ? "#FF4D4D" : "rgba(255,255,255,.6)", fontSize: 13, cursor: "pointer" }}>
+                  {a === "left" ? "◀" : a === "center" ? "≡" : "▶"}
                 </button>
               ))}
             </div>
           </div>
 
+          {/* Colore */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Colore</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Colore</div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {COLORS_TEXT.map(c => (
                 <button key={c} onClick={() => updateEl(selectedEl.id, { color: c })}
-                  style={{ width: 32, height: 32, borderRadius: "50%", background: c, border: selectedEl.color === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.2)", cursor: "pointer" }} />
+                  style={{ width: 34, height: 34, borderRadius: "50%", background: c, border: selectedEl.color === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.15)", cursor: "pointer", flexShrink: 0 }} />
               ))}
             </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Posizione rapida</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          {/* Posizione rapida */}
+          <div>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Posizione rapida</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {[
-                { label: "↖", x: 5, y: 8 }, { label: "↑", x: 35, y: 8 }, { label: "↗", x: 65, y: 8 },
-                { label: "←", x: 5, y: 42 }, { label: "⊙", x: 35, y: 42 }, { label: "→", x: 65, y: 42 },
-                { label: "↙", x: 5, y: 75 }, { label: "↓", x: 35, y: 75 }, { label: "↘", x: 65, y: 75 },
+                { label: "↖", x: 5, y: 8 }, { label: "↑", x: 38, y: 8 }, { label: "↗", x: 68, y: 8 },
+                { label: "←", x: 5, y: 44 }, { label: "⊙", x: 38, y: 44 }, { label: "→", x: 68, y: 44 },
+                { label: "↙", x: 5, y: 78 }, { label: "↓", x: 38, y: 78 }, { label: "↘", x: 68, y: 78 },
               ].map(p => (
                 <button key={p.label} onClick={() => updateEl(selectedEl.id, { x: p.x, y: p.y })}
-                  style={{ padding: "8px 0", borderRadius: 8, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontSize: 14, cursor: "pointer" }}>
+                  style={{ padding: "9px 0", borderRadius: 8, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)", fontSize: 15, cursor: "pointer" }}>
                   {p.label}
                 </button>
               ))}
             </div>
           </div>
+        </div>
+      )}
 
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Link (opzionale)</div>
-            <input type="url" value={selectedEl.link} onChange={e => updateEl(selectedEl.id, { link: e.target.value })} placeholder="https://..."
-              style={{ width: "100%", padding: "10px 14px", borderRadius: 12, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#60a5fa", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+      {/* Pannello editing testo */}
+      {editingId && (
+        <div style={{ background: "#111", borderTop: "0.5px solid rgba(255,255,255,.1)", padding: "16px 20px 28px", flexShrink: 0 }}>
+          <div style={{ color: "rgba(255,255,255,.4)", fontSize: 11, marginBottom: 10 }}>Modifica testo — premi Invio o tocca fuori per confermare</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              autoFocus
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => { if (e.key === "Enter") commitEdit(); }}
+              placeholder="Scrivi qui..."
+              style={{ flex: 1, padding: "12px 16px", borderRadius: 12, background: "#1a1a1a", border: "1.5px solid #FF4D4D", color: "#fff", fontSize: 16, outline: "none" }}
+            />
+            <button onClick={commitEdit}
+              style={{ padding: "12px 20px", borderRadius: 12, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+              OK
+            </button>
           </div>
-
-          <button onClick={() => deleteEl(selectedEl.id)}
-            style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: "rgba(255,50,50,.1)", border: "1px solid rgba(255,50,50,.3)", color: "#FF4D4D", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-            🗑 Elimina elemento
-          </button>
         </div>
       )}
     </div>
@@ -383,7 +482,6 @@ export default function EditPost() {
       }
     }
 
-    // Costruisci l'oggetto update — usa undefined per non sovrascrivere campi non modificati
     const updateObj: Record<string, any> = {
       caption,
       link_url: linkUrl || null,
@@ -393,7 +491,6 @@ export default function EditPost() {
       music_url: musicUrl,
     };
 
-    // Overlay: aggiorna solo se ci sono elementi, altrimenti non toccare
     if (textElements.length > 0) {
       updateObj.overlay_text = textElements[0].text;
       updateObj.overlay_position = "custom";
@@ -404,19 +501,10 @@ export default function EditPost() {
       updateObj.overlay_data = null;
     }
 
-    console.log("Saving post:", postId, updateObj);
-
-    const { error, data } = await supabase
-      .from("posts")
-      .update(updateObj)
-      .eq("id", postId)
-      .select()
-      .single();
-
-    console.log("Save result:", { error, data });
+    const { error } = await supabase.from("posts").update(updateObj).eq("id", postId).select().single();
 
     if (error) {
-      setSaveError(`Errore: ${error.message} (code: ${error.code})`);
+      setSaveError(`Errore: ${error.message}`);
       setSaving(false);
       return;
     }
@@ -479,22 +567,22 @@ export default function EditPost() {
       <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 100px" }}>
 
         {mediaUrl && (
-          <div style={{ marginBottom: 20, borderRadius: 16, overflow: "hidden", height: 200, position: "relative", background: "#000" }}>
+          <div style={{ marginBottom: 20, borderRadius: 16, overflow: "hidden", height: 220, position: "relative", background: "#000" }}>
             {postType === "video"
               ? <video src={mediaUrl} style={{ width: "100%", height: "100%", objectFit: "contain" }} muted />
               : <img src={mediaUrl} style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
             {textElements.map(el => {
               const fontObj = FONTS.find(f => f.id === el.font);
               return (
-                <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "3px 6px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 4, pointerEvents: "none" }}>
-                  <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
+                <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "3px 7px" : 0, background: el.bg ? "rgba(0,0,0,.6)" : "transparent", borderRadius: 5, pointerEvents: "none" }}>
+                  <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.65, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                     {el.text}
                   </span>
                 </div>
               );
             })}
             <button onClick={() => setShowTextEditor(true)}
-              style={{ position: "absolute", top: 10, right: 10, padding: "5px 10px", borderRadius: 8, background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+              style={{ position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8, background: "rgba(0,0,0,.7)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Aa {textElements.length > 0 ? `(${textElements.length})` : ""}
             </button>
           </div>
@@ -508,9 +596,9 @@ export default function EditPost() {
             </div>
             <div style={{ textAlign: "left" }}>
               <div style={{ color: textElements.length > 0 ? "#FF4D4D" : "#fff", fontWeight: 700, fontSize: 13 }}>
-                {textElements.length > 0 ? `${textElements.length} elemento/i` : "Testo sovrapposto"}
+                {textElements.length > 0 ? `${textElements.length} elemento/i testo` : "Aggiungi testo sovrapposto"}
               </div>
-              <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>Font, stile, colore, posizione, link</div>
+              <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>Font, colore, posizione, link</div>
             </div>
           </button>
         )}
