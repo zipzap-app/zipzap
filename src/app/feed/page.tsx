@@ -37,8 +37,8 @@ type Post = {
 };
 
 const mockPosts: Post[] = [
-  { id: "1", userId: "user-1", user: "astro.sky", initials: "AS", color: "#1a3a5c", caption: "Via Lattea dal Gran Sasso — 4 ore di esposizione", likes: 41200, comments: 3100, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
-  { id: "2", userId: "user-2", user: "vale.beats", initials: "VB", color: "#3d0a2e", caption: "Beat fatta in 60 secondi con samples di cucina", likes: 98000, comments: 14000, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
+  { id: "1", userId: "user-1", user: "astro.sky", initials: "AS", color: "#1a3a5c", caption: "Via Lattea dal Gran Sasso", likes: 41200, comments: 3100, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
+  { id: "2", userId: "user-2", user: "vale.beats", initials: "VB", color: "#3d0a2e", caption: "Beat in 60 secondi", likes: 98000, comments: 14000, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
 ];
 
 const colors = ["#1a3a5c", "#0d3320", "#3d0a2e", "#2a1a4a", "#1a2a0a", "#4a1a0a"];
@@ -51,7 +51,7 @@ function formatCount(n: number) {
 
 function NavDesktop({ active }: { active?: string }) {
   return (
-    <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.5)", borderRight: "0.5px solid rgba(255,255,255,.06)" }}>
+    <div className="zz-desktop" style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 20, width: 200, display: "flex", flexDirection: "column", gap: 6, padding: "28px 16px", background: "rgba(0,0,0,.85)", borderRight: "0.5px solid rgba(255,255,255,.08)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
         <div style={{ width: 32, height: 32, borderRadius: 9, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
@@ -113,7 +113,6 @@ export default function Feed() {
     setCarouselIndex(0);
   }
 
-  // Tastiera + rotella mouse
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); goNext(); }
@@ -311,12 +310,11 @@ export default function Feed() {
   if (feedTab === "seguiti" && !loadingFollowed && followedPosts.length === 0) {
     return (
       <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
-        <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-mobile { display: none !important; } }`}</style>
+        <style>{`
+          @media (max-width: 768px) { .zz-desktop { display: none !important; } }
+          @media (min-width: 769px) { .zz-mobile { display: none !important; } }
+        `}</style>
         <NavDesktop active="/feed" />
-        <div style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 20, display: "flex", gap: 24 }}>
-          <span onClick={() => setFeedTab("perTe")} style={{ color: "rgba(255,255,255,.4)", fontWeight: 600, fontSize: 14, cursor: "pointer", paddingBottom: 4 }}>Per te</span>
-          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14, borderBottom: "2px solid #fff", paddingBottom: 4 }}>Seguiti</span>
-        </div>
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
           <p style={{ color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center" }}>Nessun post dai seguiti</p>
           <button onClick={() => window.location.href = "/explore"} style={{ padding: "12px 24px", borderRadius: 14, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Scopri creator ⚡</button>
@@ -337,13 +335,23 @@ export default function Feed() {
 
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
-      <style>{`@media (max-width: 768px) { .zz-desktop { display: none !important; } } @media (min-width: 769px) { .zz-mobile { display: none !important; } }`}</style>
+      <style>{`
+        @media (max-width: 768px) { .zz-desktop { display: none !important; } }
+        @media (min-width: 769px) {
+          .zz-mobile { display: none !important; }
+          .zz-video-area { left: 200px !important; right: 72px !important; }
+          .zz-post-nav { display: flex !important; }
+          .zz-info { left: 216px !important; }
+        }
+        .zz-post-nav { display: none; }
+      `}</style>
 
+      {/* Sfondo gradient */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
 
-      {/* Media + frecce carosello integrate */}
-      {currentMedia && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
+      {/* Area video — su desktop parte dopo la sidebar */}
+      <div className="zz-video-area" style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
+        {currentMedia && (
           <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {post.postType === "video" ? (
               <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
@@ -353,7 +361,8 @@ export default function Feed() {
               <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
                 style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
             )}
-            {/* Frecce carosello — dentro il wrapper del media */}
+
+            {/* Frecce carosello foto — dentro il media */}
             {isCarousel && carouselIndex > 0 && (
               <button onClick={() => setCarouselIndex(c => c - 1)}
                 style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -367,12 +376,13 @@ export default function Feed() {
               </button>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
+      {/* Gradient overlay */}
       <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
 
-      {/* Overlay testo */}
+      {/* Overlay testo custom */}
       {post.overlayData && post.overlayData.length > 0 ? (
         post.overlayData.map((el: any) => (
           <div key={el.id} style={{ position: "absolute", zIndex: 15, left: `${el.x}%`, top: `${el.y}%`, padding: el.bg ? "4px 8px" : 0, background: el.bg ? "rgba(0,0,0,.55)" : "transparent", borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
@@ -382,7 +392,7 @@ export default function Feed() {
           </div>
         ))
       ) : post.overlayText ? (
-        <div style={{ position: "absolute", zIndex: 15, left: 16, right: 70, top: post.overlayPosition === "top" ? 100 : post.overlayPosition === "center" ? "50%" : "auto", bottom: post.overlayPosition === "bottom" ? 160 : "auto", transform: post.overlayPosition === "center" ? "translateY(-50%)" : undefined, background: "rgba(0,0,0,.6)", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", zIndex: 15, left: 16, right: 80, top: post.overlayPosition === "top" ? 100 : post.overlayPosition === "center" ? "50%" : "auto", bottom: post.overlayPosition === "bottom" ? 160 : "auto", transform: post.overlayPosition === "center" ? "translateY(-50%)" : undefined, background: "rgba(0,0,0,.6)", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 16, textAlign: "center", pointerEvents: "none" }}>
           {post.overlayText}
         </div>
       ) : null}
@@ -396,6 +406,18 @@ export default function Feed() {
           ))}
         </div>
       )}
+
+      {/* Frecce navigazione post — solo desktop, centrate verticalmente a destra del video */}
+      <div className="zz-post-nav" style={{ position: "absolute", right: 76, top: "50%", transform: "translateY(-50%)", zIndex: 25, flexDirection: "column", gap: 10, alignItems: "center" }}>
+        <button onClick={goPrev}
+          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.18)", cursor: "pointer", opacity: current === 0 ? .25 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <button onClick={goNext}
+          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.18)", cursor: "pointer", opacity: current === posts.length - 1 ? .25 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
 
       <NavDesktop active="/feed" />
 
@@ -420,7 +442,7 @@ export default function Feed() {
       </div>
 
       {/* Info post in basso */}
-      <div style={{ position: "absolute", bottom: 100, left: 16, right: 80, zIndex: 20 }}>
+      <div className="zz-info" style={{ position: "absolute", bottom: 100, left: 16, right: 80, zIndex: 20 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 480 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 42, height: 42, borderRadius: "50%", border: "2px solid rgba(255,255,255,.9)", background: post.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
@@ -452,18 +474,8 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Azioni destra + frecce su/giù post */}
-      <div style={{ position: "absolute", right: 12, bottom: 80, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-
-        {/* Frecce navigazione post — in cima alla colonna destra */}
-        <button onClick={goPrev}
-          style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.13)", cursor: "pointer", opacity: current === 0 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M2 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-        <button onClick={goNext}
-          style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.13)", cursor: "pointer", opacity: current === posts.length - 1 ? .3 : 1, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M2 5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
+      {/* Azioni destra */}
+      <div style={{ position: "absolute", right: 12, bottom: 100, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
 
         {/* Avatar */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
