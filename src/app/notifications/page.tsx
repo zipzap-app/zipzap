@@ -83,6 +83,7 @@ export default function Notifications() {
           { label: "Home", href: "/feed" },
           { label: "Esplora", href: "/explore" },
           { label: "Notifiche", href: "/notifications", active: true },
+          { label: "Messaggi", href: "/messages" },
           { label: "Zap Store", href: "/store", isStore: true },
           { label: "Profilo", href: "/profile" },
         ].map(item => (

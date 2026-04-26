@@ -62,6 +62,7 @@ function NavDesktop({ active, unread }: { active?: string; unread?: number }) {
         { label: "Home", href: "/feed" },
         { label: "Esplora", href: "/explore" },
         { label: "Notifiche", href: "/notifications", badge: unread },
+        { label: "Messaggi", href: "/messages" },
         { label: "Zap Store", href: "/store", isStore: true },
         { label: "Profilo", href: "/profile" },
       ].map(item => (
@@ -359,7 +360,7 @@ export default function Feed() {
         @media (max-width: 768px) { .zz-desktop { display: none !important; } }
         @media (min-width: 769px) {
           .zz-mobile { display: none !important; }
-          .zz-video-area { left: 200px !important; right: 72px !important; }
+          .zz-video-area { left: 220px !important; right: 72px !important; }
           .zz-post-nav { display: flex !important; }
           .zz-info { left: 216px !important; }
         }
