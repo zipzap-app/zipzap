@@ -71,13 +71,19 @@ export default function ZapStore() {
         {[
           { label: "Home", href: "/feed" },
           { label: "Esplora", href: "/explore" },
+          { label: "Notifiche", href: "/notifications" },
+          { label: "Messaggi", href: "/messages" },
           { label: "Zap Store", href: "/store", active: true, isStore: true },
           { label: "Profilo", href: "/profile" },
-        ].map((item) => (
+        ].map((item: any) => (
           <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: item.active ? "rgba(255,77,77,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.8)", fontWeight: 600, fontSize: 14 }}>
             {item.label}
           </a>
         ))}
+        <a href="/create" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, background: "#FF4D4D", textDecoration: "none", color: "#fff", fontWeight: 700, fontSize: 14, marginTop: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M7 1v12M1 7h12" strokeLinecap="round" /></svg>
+          Crea contenuto
+        </a>
       </div>
 
       {/* Navbar mobile bottom */}
@@ -85,15 +91,25 @@ export default function ZapStore() {
         {[
           { href: "/feed", label: "Home" },
           { href: "/explore", label: "Esplora" },
-          { href: "/create", label: "Crea", isCreate: true },
-          { href: "/store", label: "Store", isStore: true, active: true },
+          { href: "/create", isCreate: true },
+          { href: "/notifications", isNotif: true },
+          { href: "/messages", isMsg: true },
+          { href: "/store", isStore: true, active: true },
           { href: "/profile", label: "Profilo" },
-        ].map((item) => (
+        ].map((item: any) => (
           <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
             {item.isCreate ? (
               <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
               </div>
+            ) : item.isNotif ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            ) : item.isMsg ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
             ) : item.isStore ? (
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: item.active ? "#FF4D4D" : "rgba(255,77,77,.12)", border: item.active ? "none" : "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#fff" /></svg>
@@ -103,7 +119,7 @@ export default function ZapStore() {
               <>
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="1.6">
                   {item.href === "/feed" && <path d="M2.5 8.5l7.5-5.5 7.5 5.5v9H2.5z" />}
-                  {item.href === "/explore" && <><circle cx="10" cy="10" r="6" /></>}
+                  {item.href === "/explore" && <><circle cx="10" cy="10" r="6" /><path d="M14 14l2.5 2.5" strokeLinecap="round" /></>}
                   {item.href === "/profile" && <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></>}
                 </svg>
                 <span style={{ fontSize: 9, fontWeight: 500, color: "rgba(255,255,255,.35)" }}>{item.label}</span>
@@ -115,7 +131,6 @@ export default function ZapStore() {
 
       <div className="zz-content" style={{ minHeight: "100vh", background: "#0a0a0a", paddingBottom: 100 }}>
 
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "32px 24px 20px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -126,13 +141,11 @@ export default function ZapStore() {
             </div>
             <p style={{ color: "rgba(255,255,255,.35)", fontSize: 13, marginTop: 4 }}>Prodotti fisici e digitali dai creator</p>
           </div>
-          <button onClick={() => router.push("/sell")}
-            style={{ padding: "10px 20px", borderRadius: 12, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+          <button onClick={() => router.push("/sell")} style={{ padding: "10px 20px", borderRadius: 12, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
             + Vendi
           </button>
         </div>
 
-        {/* Filtri tipo */}
         <div style={{ display: "flex", gap: 8, padding: "0 24px", marginBottom: 12 }}>
           {[["tutti", "Tutti"], ["digital", "Digitali"], ["physical", "Fisici"]].map(([val, label]) => (
             <button key={val} onClick={() => setActiveType(val)}
@@ -142,7 +155,6 @@ export default function ZapStore() {
           ))}
         </div>
 
-        {/* Categorie */}
         <div style={{ display: "flex", gap: 8, padding: "0 24px", marginBottom: 24, overflowX: "auto", paddingBottom: 4 }}>
           {categories.map((cat) => (
             <button key={cat} onClick={() => setActiveCategory(cat)}
@@ -152,7 +164,6 @@ export default function ZapStore() {
           ))}
         </div>
 
-        {/* Loading */}
         {loading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0" }}>
             <p style={{ color: "rgba(255,255,255,.3)", fontSize: 13 }}>Caricamento prodotti...</p>
@@ -166,37 +177,24 @@ export default function ZapStore() {
             </p>
           </div>
         ) : (
-          /* Grid prodotti */
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, padding: "0 24px" }}>
             {filtered.map((product) => (
               <div key={product.id} onClick={() => setSelected(product)}
                 style={{ borderRadius: 16, overflow: "hidden", cursor: "pointer", background: "#111", border: selected?.id === product.id ? "1.5px solid #FF4D4D" : "1.5px solid rgba(255,255,255,.07)", transition: "border-color .2s" }}>
-
-                {/* Immagine */}
                 <div style={{ position: "relative", height: 150, background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                  {product.images?.[0] ? (
-                    <img src={product.images[0]} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <span style={{ fontSize: 40, opacity: .15, color: "#fff", fontWeight: 900 }}>
-                      {product.profiles?.username?.[0]?.toUpperCase() || "?"}
-                    </span>
-                  )}
+                  {product.images?.[0]
+                    ? <img src={product.images[0]} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : <span style={{ fontSize: 40, opacity: .15, color: "#fff", fontWeight: 900 }}>{product.profiles?.username?.[0]?.toUpperCase() || "?"}</span>}
                   <div style={{ position: "absolute", top: 8, left: 8, fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 7px", background: product.type === "digital" ? "rgba(29,158,117,.3)" : "rgba(255,150,0,.25)", color: product.type === "digital" ? "#4dffb8" : "#ffaa00" }}>
                     {product.type === "digital" ? "DIGITALE" : "FISICO"}
                   </div>
                 </div>
-
-                {/* Info */}
                 <div style={{ padding: 12 }}>
                   <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{product.name}</div>
-                  <div style={{ color: "rgba(255,255,255,.35)", fontSize: 11, marginBottom: 10 }}>
-                    @{product.profiles?.username || "creator"}
-                  </div>
+                  <div style={{ color: "rgba(255,255,255,.35)", fontSize: 11, marginBottom: 10 }}>@{product.profiles?.username || "creator"}</div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>€{product.price.toFixed(2)}</span>
-                    <button style={{ padding: "6px 14px", borderRadius: 8, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
-                      Acquista
-                    </button>
+                    <button style={{ padding: "6px 14px", borderRadius: 8, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Acquista</button>
                   </div>
                 </div>
               </div>
@@ -204,7 +202,6 @@ export default function ZapStore() {
           </div>
         )}
 
-        {/* Banner venditore */}
         <div style={{ margin: "32px 24px 0", borderRadius: 20, padding: "20px", background: "rgba(255,77,77,.07)", border: "1px solid rgba(255,77,77,.15)" }}>
           <div style={{ color: "#fff", fontWeight: 900, fontSize: 16, marginBottom: 6 }}>Sei un creator?</div>
           <div style={{ color: "rgba(255,255,255,.45)", fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
@@ -216,43 +213,28 @@ export default function ZapStore() {
         </div>
       </div>
 
-      {/* Modal prodotto */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.85)", padding: 16 }}
-          onClick={() => setSelected(null)}>
-          <div style={{ width: "100%", maxWidth: 400, borderRadius: 24, overflow: "hidden", background: "#111", border: "1px solid rgba(255,255,255,.1)" }}
-            onClick={e => e.stopPropagation()}>
-
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.85)", padding: 16 }} onClick={() => setSelected(null)}>
+          <div style={{ width: "100%", maxWidth: 400, borderRadius: 24, overflow: "hidden", background: "#111", border: "1px solid rgba(255,255,255,.1)" }} onClick={e => e.stopPropagation()}>
             <div style={{ position: "relative", height: 220, background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {selected.images?.[0] ? (
-                <img src={selected.images[0]} alt={selected.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <span style={{ fontSize: 64, opacity: .1, color: "#fff", fontWeight: 900 }}>
-                  {selected.profiles?.username?.[0]?.toUpperCase() || "?"}
-                </span>
-              )}
+              {selected.images?.[0]
+                ? <img src={selected.images[0]} alt={selected.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <span style={{ fontSize: 64, opacity: .1, color: "#fff", fontWeight: 900 }}>{selected.profiles?.username?.[0]?.toUpperCase() || "?"}</span>}
               <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 12, right: 12, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,.5)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5">
-                  <path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round" />
-                </svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5"><path d="M2 2l8 8M10 2l-8 8" strokeLinecap="round" /></svg>
               </button>
               <div style={{ position: "absolute", bottom: 12, left: 12, fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "2px 7px", background: selected.type === "digital" ? "rgba(29,158,117,.3)" : "rgba(255,150,0,.25)", color: selected.type === "digital" ? "#4dffb8" : "#ffaa00" }}>
                 {selected.type === "digital" ? "PRODOTTO DIGITALE" : "PRODOTTO FISICO"}
               </div>
             </div>
-
             <div style={{ padding: 20 }}>
               <div style={{ color: "#fff", fontWeight: 900, fontSize: 18, marginBottom: 4 }}>{selected.name}</div>
-              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 13, marginBottom: 12 }}>
-                @{selected.profiles?.username || "creator"} · {selected.category}
-              </div>
-
+              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 13, marginBottom: 12 }}>@{selected.profiles?.username || "creator"} · {selected.category}</div>
               {selected.description && (
                 <div style={{ color: "rgba(255,255,255,.6)", fontSize: 13, lineHeight: 1.6, marginBottom: 16, padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,.05)" }}>
                   {selected.description}
                 </div>
               )}
-
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20 }}>
                 <div>
                   <div style={{ color: "#fff", fontWeight: 900, fontSize: 32 }}>€{selected.price.toFixed(2)}</div>
@@ -263,16 +245,11 @@ export default function ZapStore() {
                   <div style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>{selected.type === "digital" ? "Digitale" : "Fisico"}</div>
                 </div>
               </div>
-
               <button style={{ width: "100%", padding: "14px 0", borderRadius: 16, background: "#FF4D4D", border: "none", color: "#fff", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
                 Acquista — €{selected.price.toFixed(2)}
               </button>
-
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10 }}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="1.2">
-                  <rect x="1" y="4" width="10" height="7" rx="1.5" />
-                  <path d="M4 4V3a2 2 0 0 1 4 0v1" />
-                </svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="1.2"><rect x="1" y="4" width="10" height="7" rx="1.5" /><path d="M4 4V3a2 2 0 0 1 4 0v1" /></svg>
                 <span style={{ color: "rgba(255,255,255,.2)", fontSize: 11 }}>Pagamento sicuro via Stripe</span>
               </div>
             </div>

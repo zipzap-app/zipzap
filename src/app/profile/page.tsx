@@ -108,10 +108,7 @@ export default function Profile() {
     if (!editingPost) return;
     setSavingEdit(true);
     const supabase = createClient();
-    await supabase.from("posts").update({
-      caption: editCaption,
-      link_url: editLinkUrl || null,
-    }).eq("id", editingPost.id);
+    await supabase.from("posts").update({ caption: editCaption, link_url: editLinkUrl || null }).eq("id", editingPost.id);
     setPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, caption: editCaption } : p));
     setSavingEdit(false);
     setEditingPost(null);
@@ -123,9 +120,7 @@ export default function Profile() {
       <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#0a0a0a" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
-              <polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" />
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
           </div>
           <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13 }}>Caricamento...</p>
         </div>
@@ -158,9 +153,11 @@ export default function Profile() {
         {[
           { label: "Home", href: "/feed" },
           { label: "Esplora", href: "/explore" },
+          { label: "Notifiche", href: "/notifications" },
+          { label: "Messaggi", href: "/messages" },
           { label: "Zap Store", href: "/store", isStore: true },
           { label: "Profilo", href: "/profile", active: true },
-        ].map((item) => (
+        ].map((item: any) => (
           <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: item.active ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.8)", fontWeight: 600, fontSize: 14 }}>
             {item.label}
           </a>
@@ -176,15 +173,24 @@ export default function Profile() {
         {[
           { href: "/feed", label: "Home" },
           { href: "/explore", label: "Esplora" },
-          { href: "/create", label: "Crea", isCreate: true },
-          { href: "/store", label: "Store", isStore: true },
+          { href: "/create", isCreate: true },
+          { href: "/notifications", isNotif: true },
+          { href: "/messages", isMsg: true },
           { href: "/profile", label: "Profilo", active: true },
-        ].map((item) => (
+        ].map((item: any) => (
           <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
             {item.isCreate ? (
               <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
               </div>
+            ) : item.isNotif ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            ) : item.isMsg ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
             ) : item.isStore ? (
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,77,77,.12)", border: "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" /></svg>
@@ -196,7 +202,7 @@ export default function Profile() {
                   stroke={item.active ? "#fff" : "rgba(255,255,255,.35)"}
                   strokeWidth={item.active ? "1.8" : "1.6"}>
                   {item.href === "/feed" && <path d="M2.5 8.5l7.5-5.5 7.5 5.5v9H2.5z" />}
-                  {item.href === "/explore" && <circle cx="10" cy="10" r="6" />}
+                  {item.href === "/explore" && <><circle cx="10" cy="10" r="6" /><path d="M14 14l2.5 2.5" strokeLinecap="round" /></>}
                   {item.href === "/profile" && <><circle cx="10" cy="7" r="3.5" /><path d="M3 18c0-3.5 3.1-6 7-6s7 2.5 7 6" /></>}
                 </svg>
                 <span style={{ fontSize: 9, fontWeight: 500, color: item.active ? "#fff" : "rgba(255,255,255,.35)" }}>{item.label}</span>
@@ -299,14 +305,9 @@ export default function Profile() {
         {activeTab === "prodotti" ? (
           <div style={{ padding: "16px 24px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 12 }}>
-                {products.length} prodott{products.length === 1 ? "o" : "i"} pubblicat{products.length === 1 ? "o" : "i"}
-              </div>
-              <a href="/sell" style={{ padding: "8px 16px", borderRadius: 10, background: "#FF4D4D", color: "#fff", fontWeight: 700, fontSize: 12, textDecoration: "none" }}>
-                + Nuovo
-              </a>
+              <div style={{ color: "rgba(255,255,255,.4)", fontSize: 12 }}>{products.length} prodott{products.length === 1 ? "o" : "i"} pubblicat{products.length === 1 ? "o" : "i"}</div>
+              <a href="/sell" style={{ padding: "8px 16px", borderRadius: 10, background: "#FF4D4D", color: "#fff", fontWeight: 700, fontSize: 12, textDecoration: "none" }}>+ Nuovo</a>
             </div>
-
             {products.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 0", gap: 12 }}>
                 <p style={{ color: "rgba(255,255,255,.3)", fontSize: 13, textAlign: "center" }}>
@@ -319,9 +320,7 @@ export default function Profile() {
                 {products.map((p) => (
                   <div key={p.id} style={{ display: "flex", gap: 12, padding: 12, borderRadius: 16, background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
                     <div style={{ width: 72, height: 72, borderRadius: 12, background: "#1a1a2e", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {p.images?.[0]
-                        ? <img src={p.images[0]} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        : <span style={{ fontSize: 24, opacity: .2 }}>📦</span>}
+                      {p.images?.[0] ? <img src={p.images[0]} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 24, opacity: .2 }}>📦</span>}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
@@ -341,11 +340,8 @@ export default function Profile() {
                           }} style={{ padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", background: p.active ? "rgba(29,158,117,.2)" : "rgba(255,255,255,.08)", color: p.active ? "#4dffb8" : "rgba(255,255,255,.4)" }}>
                             {p.active ? "✓ Attivo" : "Disattivato"}
                           </button>
-                          <button onClick={() => setProductMenu(p)}
-                            style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.08)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="rgba(255,255,255,.6)">
-                              <circle cx="2" cy="7" r="1.2" /><circle cx="7" cy="7" r="1.2" /><circle cx="12" cy="7" r="1.2" />
-                            </svg>
+                          <button onClick={() => setProductMenu(p)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.08)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="rgba(255,255,255,.6)"><circle cx="2" cy="7" r="1.2" /><circle cx="7" cy="7" r="1.2" /><circle cx="12" cy="7" r="1.2" /></svg>
                           </button>
                         </div>
                       </div>
@@ -355,7 +351,6 @@ export default function Profile() {
               </div>
             )}
           </div>
-
         ) : (
           filteredPosts.length === 0 ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 24px", gap: 12 }}>
@@ -373,15 +368,9 @@ export default function Profile() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, marginTop: 2 }}>
               {filteredPosts.map((p) => (
-                <div key={p.id}
-                  onClick={() => openPostInFeed(p.id)}
-                  style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
-                  {p.media_url && p.type === "video" && (
-                    <video src={p.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
-                  )}
-                  {p.media_url && p.type === "photo" && (
-                    <img src={p.media_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  )}
+                <div key={p.id} onClick={() => openPostInFeed(p.id)} style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
+                  {p.media_url && p.type === "video" && <video src={p.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />}
+                  {p.media_url && p.type === "photo" && <img src={p.media_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
                   {!p.media_url && (
                     <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a1a2e, #0a0a1a)", padding: 8 }}>
                       <span style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center" }}>{p.caption?.slice(0, 40)}</span>
@@ -390,26 +379,19 @@ export default function Profile() {
                   <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%)" }} />
                   {p.type === "video" && (
                     <div style={{ position: "absolute", top: 6, right: 6 }}>
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5">
-                        <rect x="1" y="3" width="10" height="10" rx="1.5" /><path d="M11 6l4-2v8l-4-2" />
-                      </svg>
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5"><rect x="1" y="3" width="10" height="10" rx="1.5" /><path d="M11 6l4-2v8l-4-2" /></svg>
                     </div>
                   )}
                   <div style={{ position: "absolute", top: 6, left: 6, fontSize: 12 }}>
                     {p.visibility === "private" ? "🔒" : p.visibility === "friends" ? "👥" : ""}
                   </div>
                   <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", alignItems: "center", gap: 3 }}>
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5">
-                      <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" /><circle cx="8" cy="8" r="2" />
-                    </svg>
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" /><circle cx="8" cy="8" r="2" /></svg>
                     <span style={{ color: "rgba(255,255,255,.8)", fontSize: 10, fontWeight: 600 }}>{formatCount(p.views_count || 0)}</span>
                   </div>
                   {activeTab !== "preferiti" && (
-                    <button onClick={(e) => { e.stopPropagation(); setPostMenu(p); }}
-                      style={{ position: "absolute", bottom: 4, right: 4, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,.6)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="rgba(255,255,255,.8)">
-                        <circle cx="6" cy="2" r="1" /><circle cx="6" cy="6" r="1" /><circle cx="6" cy="10" r="1" />
-                      </svg>
+                    <button onClick={(e) => { e.stopPropagation(); setPostMenu(p); }} style={{ position: "absolute", bottom: 4, right: 4, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,.6)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="rgba(255,255,255,.8)"><circle cx="6" cy="2" r="1" /><circle cx="6" cy="6" r="1" /><circle cx="6" cy="10" r="1" /></svg>
                     </button>
                   )}
                 </div>
@@ -421,32 +403,22 @@ export default function Profile() {
 
       {/* Modal gestione post */}
       {postMenu && !editingPost && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.7)" }}
-          onClick={() => setPostMenu(null)}>
-          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
-            onClick={e => e.stopPropagation()}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.7)" }} onClick={() => setPostMenu(null)}>
+          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 4 }}>Gestisci post</div>
             <div style={{ color: "rgba(255,255,255,.35)", fontSize: 12, marginBottom: 20 }}>{postMenu.caption?.slice(0, 60) || "Post senza descrizione"}</div>
-
-            {/* Visibilità */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 10 }}>Visibilità</div>
               <div style={{ display: "flex", gap: 8 }}>
-                {[
-                  { val: "public", label: "Tutti", icon: "🌍" },
-                  { val: "friends", label: "Amici", icon: "👥" },
-                  { val: "private", label: "Solo io", icon: "🔒" },
-                ].map((v) => (
-                  <button key={v.val}
-                    onClick={async () => {
-                      setSavingVisibility(true);
-                      const supabase = createClient();
-                      await supabase.from("posts").update({ visibility: v.val }).eq("id", postMenu.id);
-                      setPosts(prev => prev.map(p => p.id === postMenu.id ? { ...p, visibility: v.val } : p));
-                      setPostMenu({ ...postMenu, visibility: v.val });
-                      setSavingVisibility(false);
-                    }}
-                    style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: postMenu.visibility === v.val ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: postMenu.visibility === v.val ? "rgba(255,77,77,.1)" : "rgba(255,255,255,.04)", cursor: "pointer" }}>
+                {[{ val: "public", label: "Tutti", icon: "🌍" }, { val: "friends", label: "Amici", icon: "👥" }, { val: "private", label: "Solo io", icon: "🔒" }].map((v) => (
+                  <button key={v.val} onClick={async () => {
+                    setSavingVisibility(true);
+                    const supabase = createClient();
+                    await supabase.from("posts").update({ visibility: v.val }).eq("id", postMenu.id);
+                    setPosts(prev => prev.map(p => p.id === postMenu.id ? { ...p, visibility: v.val } : p));
+                    setPostMenu({ ...postMenu, visibility: v.val });
+                    setSavingVisibility(false);
+                  }} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: postMenu.visibility === v.val ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: postMenu.visibility === v.val ? "rgba(255,77,77,.1)" : "rgba(255,255,255,.04)", cursor: "pointer" }}>
                     <div style={{ fontSize: 20, marginBottom: 4 }}>{v.icon}</div>
                     <div style={{ color: postMenu.visibility === v.val ? "#FF4D4D" : "rgba(255,255,255,.6)", fontWeight: 600, fontSize: 12 }}>{v.label}</div>
                   </button>
@@ -454,82 +426,48 @@ export default function Profile() {
               </div>
               {savingVisibility && <p style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 8, textAlign: "center" }}>Salvataggio...</p>}
             </div>
-
-            {/* Apri nel feed */}
-            <button onClick={() => { openPostInFeed(postMenu.id); setPostMenu(null); }}
-              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
-              ▶ Apri nel feed
-            </button>
-
-            {/* Modifica */}
-<button onClick={() => { window.location.href = `/edit-post/${postMenu.id}`; setPostMenu(null); }}
-  style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
-  ✏️ Modifica post
-</button>
-
-            {/* Elimina */}
+            <button onClick={() => { openPostInFeed(postMenu.id); setPostMenu(null); }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>▶ Apri nel feed</button>
+            <button onClick={() => { window.location.href = `/edit-post/${postMenu.id}`; setPostMenu(null); }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>✏️ Modifica post</button>
             <button onClick={async () => {
               if (!confirm("Sei sicuro di voler eliminare questo post?")) return;
               const supabase = createClient();
               await supabase.from("posts").delete().eq("id", postMenu.id);
               setPosts(prev => prev.filter(p => p.id !== postMenu.id));
               setPostMenu(null);
-            }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,50,50,.1)", border: "1px solid rgba(255,50,50,.3)", color: "#FF4D4D", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
-              🗑 Elimina post
-            </button>
-
-            <button onClick={() => setPostMenu(null)}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-              Annulla
-            </button>
+            }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,50,50,.1)", border: "1px solid rgba(255,50,50,.3)", color: "#FF4D4D", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>🗑 Elimina post</button>
+            <button onClick={() => setPostMenu(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Annulla</button>
           </div>
         </div>
       )}
 
       {/* Modal modifica post */}
       {editingPost && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.8)" }}
-          onClick={() => setEditingPost(null)}>
-          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
-            onClick={e => e.stopPropagation()}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.8)" }} onClick={() => setEditingPost(null)}>
+          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 20 }}>✏️ Modifica post</div>
-
             <div style={{ marginBottom: 16 }}>
               <label style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Descrizione</label>
-              <textarea value={editCaption} onChange={e => setEditCaption(e.target.value.slice(0, 300))} rows={4}
-                style={{ width: "100%", padding: "12px 16px", borderRadius: 14, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
+              <textarea value={editCaption} onChange={e => setEditCaption(e.target.value.slice(0, 300))} rows={4} style={{ width: "100%", padding: "12px 16px", borderRadius: 14, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
               <div style={{ textAlign: "right", fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 4 }}>{editCaption.length}/300</div>
             </div>
-
             <div style={{ marginBottom: 20 }}>
               <label style={{ color: "rgba(255,255,255,.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Link affiliato</label>
-              <input type="url" value={editLinkUrl} onChange={e => setEditLinkUrl(e.target.value)}
-                placeholder="https://amazon.it/prodotto..."
-                style={{ width: "100%", padding: "12px 16px", borderRadius: 14, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#FF4D4D", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+              <input type="url" value={editLinkUrl} onChange={e => setEditLinkUrl(e.target.value)} placeholder="https://amazon.it/prodotto..." style={{ width: "100%", padding: "12px 16px", borderRadius: 14, background: "#1a1a1a", border: "1px solid rgba(255,255,255,.1)", color: "#FF4D4D", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
             </div>
-
-            <button onClick={savePostEdit} disabled={savingEdit}
-              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: savingEdit ? "#993333" : "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+            <button onClick={savePostEdit} disabled={savingEdit} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: savingEdit ? "#993333" : "#FF4D4D", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
               {savingEdit ? "Salvataggio..." : "Salva modifiche ⚡"}
             </button>
-
-            <button onClick={() => setEditingPost(null)}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-              Annulla
-            </button>
+            <button onClick={() => setEditingPost(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Annulla</button>
           </div>
         </div>
       )}
 
       {/* Modal gestione prodotto */}
       {productMenu && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.7)" }}
-          onClick={() => setProductMenu(null)}>
-          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }}
-            onClick={e => e.stopPropagation()}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,.7)" }} onClick={() => setProductMenu(null)}>
+          <div style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#111", border: "0.5px solid rgba(255,255,255,.1)", padding: "20px 20px 40px" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 900, color: "#fff", fontSize: 16, marginBottom: 4 }}>Gestisci prodotto</div>
             <div style={{ color: "rgba(255,255,255,.35)", fontSize: 12, marginBottom: 20 }}>{productMenu.name} · €{productMenu.price.toFixed(2)}</div>
-
             <button onClick={async () => {
               const supabase = createClient();
               await supabase.from("products").update({ active: !productMenu.active }).eq("id", productMenu.id);
@@ -538,12 +476,7 @@ export default function Profile() {
             }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: productMenu.active ? "rgba(255,150,0,.1)" : "rgba(29,158,117,.1)", border: productMenu.active ? "1px solid rgba(255,150,0,.3)" : "1px solid rgba(29,158,117,.3)", color: productMenu.active ? "#ffaa00" : "#4dffb8", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
               {productMenu.active ? "⏸ Disattiva prodotto" : "▶ Riattiva prodotto"}
             </button>
-
-            <button onClick={() => { window.location.href = `/sell?edit=${productMenu.id}`; }}
-              style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
-              ✏️ Modifica prodotto
-            </button>
-
+            <button onClick={() => { window.location.href = `/sell?edit=${productMenu.id}`; }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>✏️ Modifica prodotto</button>
             <button onClick={async () => {
               if (!confirm("Sei sicuro di voler eliminare questo prodotto?")) return;
               setDeletingProduct(true);
@@ -555,11 +488,7 @@ export default function Profile() {
             }} style={{ width: "100%", padding: "14px 0", borderRadius: 14, background: "rgba(255,50,50,.1)", border: "1px solid rgba(255,50,50,.3)", color: "#FF4D4D", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
               {deletingProduct ? "Eliminazione..." : "🗑 Elimina prodotto"}
             </button>
-
-            <button onClick={() => setProductMenu(null)}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-              Annulla
-            </button>
+            <button onClick={() => setProductMenu(null)} style={{ width: "100%", padding: "12px 0", borderRadius: 14, background: "rgba(255,255,255,.06)", border: "none", color: "rgba(255,255,255,.5)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Annulla</button>
           </div>
         </div>
       )}

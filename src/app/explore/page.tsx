@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 
 const trending = [
   { tag: "#tecnologia", posts: "128k" },
@@ -45,9 +44,11 @@ export default function Explore() {
         {[
           { label: "Home", href: "/feed" },
           { label: "Esplora", href: "/explore", active: true },
+          { label: "Notifiche", href: "/notifications" },
+          { label: "Messaggi", href: "/messages" },
           { label: "Zap Store", href: "/store", isStore: true },
           { label: "Profilo", href: "/profile" },
-        ].map((item) => (
+        ].map((item: any) => (
           <a key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: item.active ? "rgba(255,255,255,.1)" : "transparent", textDecoration: "none", color: item.isStore ? "#FF4D4D" : "rgba(255,255,255,.8)", fontWeight: 600, fontSize: 14 }}>
             {item.label}
           </a>
@@ -63,15 +64,24 @@ export default function Explore() {
         {[
           { href: "/feed", label: "Home" },
           { href: "/explore", label: "Esplora", active: true },
-          { href: "/create", label: "Crea", isCreate: true },
-          { href: "/store", label: "Store", isStore: true },
+          { href: "/create", isCreate: true },
+          { href: "/notifications", isNotif: true },
+          { href: "/messages", isMsg: true },
           { href: "/profile", label: "Profilo" },
-        ].map((item) => (
+        ].map((item: any) => (
           <a key={item.href} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none" }}>
             {item.isCreate ? (
               <div style={{ width: 46, height: 32, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 3v12M3 9h12" strokeLinecap="round" /></svg>
               </div>
+            ) : item.isNotif ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            ) : item.isMsg ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
             ) : item.isStore ? (
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,77,77,.12)", border: "1px solid rgba(255,77,77,.25)", borderRadius: 8, padding: "4px 8px" }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="#FF4D4D" /></svg>
@@ -96,7 +106,6 @@ export default function Explore() {
       {/* Contenuto */}
       <div className="zz-content" style={{ maxWidth: 640, margin: "0 auto", padding: "32px 20px 120px" }}>
 
-        {/* Header mobile */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, background: "#FF4D4D", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><polygon points="10,1 6,8 9,8 5,15 13,6 9,6" fill="white" /></svg>
@@ -104,7 +113,6 @@ export default function Explore() {
           <span style={{ color: "#fff", fontWeight: 900, fontSize: 20, letterSpacing: -0.5 }}>Zip<span style={{ color: "#FF4D4D" }}>Zap</span></span>
         </div>
 
-        {/* Search */}
         <div style={{ position: "relative", marginBottom: 28 }}>
           <div style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)" }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5">
@@ -115,11 +123,8 @@ export default function Explore() {
             style={{ width: "100%", paddingLeft: 44, paddingRight: 16, paddingTop: 14, paddingBottom: 14, borderRadius: 16, background: "#1a1a1a", border: "1.5px solid rgba(255,255,255,.08)", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
         </div>
 
-        {/* Trending */}
         <div style={{ marginBottom: 28 }}>
-          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 14 }}>
-            Trending ora
-          </div>
+          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 14 }}>Trending ora</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {trending.map((t, i) => (
               <div key={t.tag} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 14, padding: "12px 16px", cursor: "pointer", background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
@@ -133,11 +138,8 @@ export default function Explore() {
           </div>
         </div>
 
-        {/* Creator suggeriti */}
         <div>
-          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 14 }}>
-            Creator suggeriti
-          </div>
+          <div style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 14 }}>Creator suggeriti</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {creators.map((c) => (
               <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: 16, padding: "12px 16px", background: "#111", border: "0.5px solid rgba(255,255,255,.07)" }}>
