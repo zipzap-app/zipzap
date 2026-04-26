@@ -341,17 +341,33 @@ export default function Feed() {
       <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
 
       {currentMedia && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
-          {post.postType === "video" ? (
-            <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
-              style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
-              autoPlay loop playsInline muted={muted} />
-          ) : (
-            <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
-              style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
-          )}
-        </div>
+  <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
+    <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {post.postType === "video" ? (
+        <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
+          style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
+          autoPlay loop playsInline muted={muted} />
+      ) : (
+        <img key={`${post.id}-${carouselIndex}`} src={currentMedia} alt="post"
+          style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
       )}
+
+      {/* Frecce carosello — dentro il media, allineate al contenuto */}
+      {isCarousel && carouselIndex > 0 && (
+        <button onClick={() => setCarouselIndex(c => c - 1)}
+          style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.5)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 2L4 7l5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      )}
+      {isCarousel && carouselIndex < allMedia.length - 1 && (
+        <button onClick={() => setCarouselIndex(c => c + 1)}
+          style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", zIndex: 15, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,.5)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#fff" strokeWidth="2"><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      )}
+    </div>
+  </div>
+)}
 
       <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.0) 40%, rgba(0,0,0,.3) 100%)", pointerEvents: "none" }} />
 
