@@ -4,14 +4,14 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const libraryTracks = [
-  { id: "1", title: "Summer Vibes", artist: "Pexels Music", duration: 180, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { id: "2", title: "Chill Lofi Beat", artist: "Free Music Archive", duration: 142, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-  { id: "3", title: "Epic Cinematic", artist: "Bensound", duration: 210, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
-  { id: "4", title: "Acoustic Morning", artist: "Pixabay Music", duration: 165, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
-  { id: "5", title: "Urban Groove", artist: "Free Music Archive", duration: 198, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
-  { id: "6", title: "Dreamy Ambient", artist: "Bensound", duration: 223, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
-  { id: "7", title: "Happy Pop", artist: "Pixabay Music", duration: 155, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
-  { id: "8", title: "Dark Electronic", artist: "Free Music Archive", duration: 190, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
+  { id: "a0000001-0000-0000-0000-000000000001", title: "Summer Vibes", artist: "Pexels Music", duration: 180, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { id: "a0000002-0000-0000-0000-000000000002", title: "Chill Lofi Beat", artist: "Free Music Archive", duration: 142, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+  { id: "a0000003-0000-0000-0000-000000000003", title: "Epic Cinematic", artist: "Bensound", duration: 210, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+  { id: "a0000004-0000-0000-0000-000000000004", title: "Acoustic Morning", artist: "Pixabay Music", duration: 165, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+  { id: "a0000005-0000-0000-0000-000000000005", title: "Urban Groove", artist: "Free Music Archive", duration: 198, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+  { id: "a0000006-0000-0000-0000-000000000006", title: "Dreamy Ambient", artist: "Bensound", duration: 223, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
+  { id: "a0000007-0000-0000-0000-000000000007", title: "Happy Pop", artist: "Pixabay Music", duration: 155, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
+  { id: "a0000008-0000-0000-0000-000000000008", title: "Dark Electronic", artist: "Free Music Archive", duration: 190, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
 ];
 
 const FONTS = [
@@ -549,7 +549,7 @@ function TextOverlayEditor({
                   fontStyle: el.italic ? "italic" : "normal",
                   textAlign: el.align,
                   display: "block",
-                  whiteSpace: mediaType === "text" ? "normal" : "nowrap",
+                  whiteSpace: mediaType === "text" ? "pre-wrap" : "pre-line",
                   wordBreak: mediaType === "text" ? "break-word" : "normal",
                   lineHeight: mediaType === "text" ? 1.3 : 1.2,
                 }}>
@@ -939,6 +939,21 @@ export default function Create() {
     };
   }, []);
 
+  // Pre-selezione audio da sessionStorage (dopo "Usa questo audio" da AudioSheet)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("zz_preselected_audio");
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data && data.id && data.title) {
+          setSelectedTrack({ id: data.id, title: data.title, artist: data.artist || "", url: data.url });
+        }
+        sessionStorage.removeItem("zz_preselected_audio");
+      }
+    } catch {}
+  }, []);
+
   function handleMediaChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1046,6 +1061,8 @@ export default function Create() {
       if (mediaUrls.length > 0) mediaUrl = mediaUrls[0];
     }
 
+    let audioIdForPost: string | null = null;
+
     if (uploadedAudio) {
       setUploadProgress(65);
       const ext = uploadedAudio.name.split(".").pop();
@@ -1054,9 +1071,23 @@ export default function Create() {
       if (!audioError) {
         const { data } = supabase.storage.from("audio").getPublicUrl(path);
         musicUrl = data.publicUrl;
+        // Crea riga audio per audio originale
+        const audioTitle = uploadedAudio.name.replace(/\.[^.]+$/, "");
+        const { data: newAudio } = await supabase.from("audios").insert({
+          title: audioTitle,
+          artist: "Il mio audio",
+          url: musicUrl,
+          uploader_id: user.id,
+          source: "user",
+        }).select().single();
+        if (newAudio) audioIdForPost = newAudio.id;
       }
     } else if (selectedTrack?.url) {
       musicUrl = selectedTrack.url;
+      // Verifica che l'ID sia un UUID (libreria) — altrimenti null
+      if (selectedTrack.id && /^[0-9a-f-]{36}$/i.test(selectedTrack.id)) {
+        audioIdForPost = selectedTrack.id;
+      }
     }
 
     setUploadProgress(80);
@@ -1071,6 +1102,7 @@ export default function Create() {
       music_title: selectedTrack?.title || null,
       music_artist: selectedTrack?.artist || null,
       music_url: musicUrl || null,
+      audio_id: audioIdForPost,
       visibility,
       overlay_text: textElements.length > 0 ? textElements[0].text : null,
       overlay_position: textElements.length > 0 ? "custom" : "bottom",
@@ -1169,7 +1201,7 @@ export default function Create() {
                   const ds = getDisplayStyle(el);
                   return (
                     <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
-                      <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
+                      <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "pre-line" }}>
                         {el.text}
                       </span>
                     </div>
@@ -1216,7 +1248,7 @@ export default function Create() {
                     const ds = getDisplayStyle(el);
                     return (
                       <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
-                        <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
+                        <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "pre-line" }}>
                           {el.text}
                         </span>
                       </div>

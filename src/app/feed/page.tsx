@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Comments from "@/components/Comments";
+import AudioSheet from "@/components/AudioSheet";
 import { createClient } from "@/lib/supabase/client";
 
 const FONT_FAMILIES: Record<string, string> = {
@@ -48,6 +49,7 @@ type Post = {
   mediaUrl: string;
   mediaUrls: string[];
   postType: string;
+  audioId: string | null;
   musicUrl: string | null;
   musicTitle: string | null;
   musicArtist: string | null;
@@ -123,6 +125,7 @@ export default function Feed() {
   const [bookmarked, setBookmarked] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
+  const [showAudioSheet, setShowAudioSheet] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -192,6 +195,7 @@ export default function Feed() {
       visibility: p.visibility || "public",
       textBgColor: p.text_bg_color || null,
       textAspect: p.text_aspect || null,
+      audioId: p.audio_id || null,
     };
   }
 
@@ -597,7 +601,7 @@ export default function Feed() {
                 const isTextPost = post.postType === "text";
                 return (
                   <div key={el.id} style={{ position: "absolute", zIndex: 17, left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss, background: ds.bgRgba, border: ds.borderCss, borderRadius: 6, pointerEvents: "none", maxWidth: isTextPost ? "85%" : "70%", textAlign: "center" }}>
-                    <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: isTextPost ? "normal" : "nowrap", wordBreak: isTextPost ? "break-word" : "normal", lineHeight: isTextPost ? 1.3 : 1.2 }}>{el.text}</span>
+                    <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: isTextPost ? "pre-wrap" : "pre-line", wordBreak: isTextPost ? "break-word" : "normal", lineHeight: isTextPost ? 1.3 : 1.2 }}>{el.text}</span>
                   </div>
                 );
               })
@@ -671,10 +675,14 @@ export default function Feed() {
           </div>
           {post.caption && <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.55, maxWidth: 400, textShadow: "0 1px 6px rgba(0,0,0,.8)" }}>{post.caption}</p>}
           {post.musicTitle && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5"><circle cx="4" cy="12" r="2" /><circle cx="12" cy="10" r="2" /><path d="M6 12V4l8-2v8" strokeLinecap="round" /></svg>
-              <span style={{ color: "rgba(255,255,255,.7)", fontSize: 12 }}>{post.musicTitle} — {post.musicArtist}</span>
-            </div>
+            <button onClick={() => setShowAudioSheet(true)} type="button"
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(0,0,0,.5)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 20, padding: "5px 12px 5px 8px", cursor: "pointer", maxWidth: 280 }}>
+              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg, #FF4D4D, #c33)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.6"><circle cx="4" cy="12" r="2" /><circle cx="12" cy="10" r="2" /><path d="M6 12V4l8-2v8" strokeLinecap="round" /></svg>
+              </div>
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.musicTitle} · {post.musicArtist}</span>
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" style={{ flexShrink: 0 }}><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
           )}
           {isCarousel && <span style={{ color: "rgba(255,255,255,.5)", fontSize: 11 }}>📷 {allMedia.length} foto</span>}
           {post.hasLink && post.linkName && (
@@ -835,6 +843,16 @@ export default function Feed() {
       )}
 
       {commentPostId && <Comments postId={commentPostId} onClose={() => setCommentPostId(null)} />}
+
+      {showAudioSheet && (
+        <AudioSheet
+          audioId={post.audioId}
+          fallbackTitle={post.musicTitle}
+          fallbackArtist={post.musicArtist}
+          fallbackUrl={post.musicUrl}
+          onClose={() => setShowAudioSheet(false)}
+        />
+      )}
     </div>
   );
 }

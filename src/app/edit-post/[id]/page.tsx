@@ -4,14 +4,14 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const libraryTracks = [
-  { id: "1", title: "Summer Vibes", artist: "Pexels Music", duration: 180, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { id: "2", title: "Chill Lofi Beat", artist: "Free Music Archive", duration: 142, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-  { id: "3", title: "Epic Cinematic", artist: "Bensound", duration: 210, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
-  { id: "4", title: "Acoustic Morning", artist: "Pixabay Music", duration: 165, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
-  { id: "5", title: "Urban Groove", artist: "Free Music Archive", duration: 198, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
-  { id: "6", title: "Dreamy Ambient", artist: "Bensound", duration: 223, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
-  { id: "7", title: "Happy Pop", artist: "Pixabay Music", duration: 155, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
-  { id: "8", title: "Dark Electronic", artist: "Free Music Archive", duration: 190, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
+  { id: "a0000001-0000-0000-0000-000000000001", title: "Summer Vibes", artist: "Pexels Music", duration: 180, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { id: "a0000002-0000-0000-0000-000000000002", title: "Chill Lofi Beat", artist: "Free Music Archive", duration: 142, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+  { id: "a0000003-0000-0000-0000-000000000003", title: "Epic Cinematic", artist: "Bensound", duration: 210, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+  { id: "a0000004-0000-0000-0000-000000000004", title: "Acoustic Morning", artist: "Pixabay Music", duration: 165, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+  { id: "a0000005-0000-0000-0000-000000000005", title: "Urban Groove", artist: "Free Music Archive", duration: 198, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+  { id: "a0000006-0000-0000-0000-000000000006", title: "Dreamy Ambient", artist: "Bensound", duration: 223, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
+  { id: "a0000007-0000-0000-0000-000000000007", title: "Happy Pop", artist: "Pixabay Music", duration: 155, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
+  { id: "a0000008-0000-0000-0000-000000000008", title: "Dark Electronic", artist: "Free Music Archive", duration: 190, url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
 ];
 
 const FONTS = [
@@ -943,7 +943,7 @@ export default function EditPost() {
         setTextElements(data.overlay_data);
       }
       if (data.music_title) {
-        setSelectedTrack({ id: "existing", title: data.music_title, artist: data.music_artist || "", url: data.music_url || undefined });
+        setSelectedTrack({ id: data.audio_id || "existing", title: data.music_title, artist: data.music_artist || "", url: data.music_url || undefined });
       }
       setLoading(false);
     }
@@ -1012,6 +1012,11 @@ export default function EditPost() {
     let musicUrl: string | null = currentTrack?.url || null;
     let musicTitle: string | null = currentTrack?.title || null;
     let musicArtist: string | null = currentTrack?.artist || null;
+    let audioIdForPost: string | null = null;
+    // Se l'ID corrente è già un UUID (da DB), usalo
+    if (currentTrack?.id && /^[0-9a-f-]{36}$/i.test(currentTrack.id)) {
+      audioIdForPost = currentTrack.id;
+    }
 
     if (currentUploaded) {
       const ext = currentUploaded.name.split(".").pop();
@@ -1022,15 +1027,25 @@ export default function EditPost() {
         musicUrl = urlData.publicUrl;
         musicTitle = currentUploaded.name.replace(/\.[^.]+$/, "");
         musicArtist = "Il mio audio";
+        // Crea nuova riga audio
+        const { data: newAudio } = await supabase.from("audios").insert({
+          title: musicTitle,
+          artist: musicArtist,
+          url: musicUrl,
+          uploader_id: user.id,
+          source: "user",
+        }).select().single();
+        if (newAudio) audioIdForPost = newAudio.id;
       }
     }
 
     // Diagnostica visibile (rimuovere dopo aver verificato)
-    console.log("[ZipZap save]", { currentTrack, currentUploaded: !!currentUploaded, musicUrl, musicTitle, musicArtist });
+    console.log("[ZipZap save]", { currentTrack, currentUploaded: !!currentUploaded, musicUrl, musicTitle, musicArtist, audioIdForPost });
 
     const updateObj: Record<string, any> = {
       caption, link_url: linkUrl || null, visibility,
       music_title: musicTitle, music_artist: musicArtist, music_url: musicUrl,
+      audio_id: audioIdForPost,
     };
 
     if (textElements.length > 0) {

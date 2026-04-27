@@ -68,6 +68,8 @@ export default function Profile() {
   const [editCaption, setEditCaption] = useState("");
   const [editLinkUrl, setEditLinkUrl] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [audioFavorites, setAudioFavorites] = useState<any[]>([]);
+  const [audioPostCounts, setAudioPostCounts] = useState<Record<string, number>>({});
 
   // Listener per refresh forzato dall'URL (es. ?refresh=12345 dopo salvataggio in /edit-post)
   const [refreshKey, setRefreshKey] = useState(0);
@@ -81,31 +83,78 @@ export default function Profile() {
     }
   }, []);
 
+  const [loadError, setLoadError] = useState<string>("");
+
   useEffect(() => {
     async function load() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "/login"; return; }
 
+      // Profilo + follows + bookmarks + prodotti
       const [
         { data: profileData },
-        { data: postsData },
         { count: followers },
-        { data: bookmarksData },
         { data: productsData },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count, visibility, link_url, updated_at, text_bg_color, text_aspect, overlay_data").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
-        supabase.from("bookmarks").select("post_id, posts(id, type, media_url, caption, likes_count, comments_count, views_count, visibility, updated_at, text_bg_color, text_aspect, overlay_data)").eq("user_id", user.id),
         supabase.from("products").select("*").eq("seller_id", user.id).order("created_at", { ascending: false }),
       ]);
+
+      // Posts: prima query con tutti i campi nuovi. Se fallisce, retry con campi base.
+      let postsData: any[] | null = null;
+      const fullSelect = "id, type, media_url, caption, likes_count, comments_count, views_count, visibility, link_url, updated_at, text_bg_color, text_aspect, overlay_data";
+      const baseSelect = "id, type, media_url, caption, likes_count, comments_count, views_count, visibility, link_url";
+
+      const tryFull = await supabase.from("posts").select(fullSelect).eq("user_id", user.id).order("created_at", { ascending: false });
+      if (tryFull.error) {
+        // Fallback: schema vecchio. Mostra comunque i post.
+        const tryBase = await supabase.from("posts").select(baseSelect).eq("user_id", user.id).order("created_at", { ascending: false });
+        if (tryBase.error) {
+          setLoadError(`Impossibile caricare i post: ${tryBase.error.message}`);
+        } else {
+          postsData = tryBase.data;
+        }
+      } else {
+        postsData = tryFull.data;
+      }
+
+      // Bookmarks: stesso pattern
+      let bookmarksData: any[] | null = null;
+      const tryBookFull = await supabase.from("bookmarks").select(`post_id, posts(${fullSelect})`).eq("user_id", user.id);
+      if (tryBookFull.error) {
+        const tryBookBase = await supabase.from("bookmarks").select(`post_id, posts(${baseSelect})`).eq("user_id", user.id);
+        if (!tryBookBase.error) bookmarksData = tryBookBase.data;
+      } else {
+        bookmarksData = tryBookFull.data;
+      }
 
       if (profileData) setProfile(profileData);
       if (postsData) setPosts(postsData as any);
       if (bookmarksData) setBookmarks(bookmarksData.map((b: any) => b.posts).filter(Boolean));
       if (productsData) setProducts(productsData);
       setFollowersCount(followers || 0);
+
+      // Carica audio preferiti
+      const { data: favsData } = await supabase
+        .from("audio_favorites")
+        .select("audio_id, audios(id, title, artist, url, duration, source)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      const favs = (favsData || []).map((f: any) => f.audios).filter(Boolean);
+      setAudioFavorites(favs);
+
+      // Conta i post per ciascun audio preferito
+      if (favs.length > 0) {
+        const counts: Record<string, number> = {};
+        await Promise.all(favs.map(async (a: any) => {
+          const { count } = await supabase.from("posts").select("*", { count: "exact", head: true }).eq("audio_id", a.id);
+          counts[a.id] = count || 0;
+        }));
+        setAudioPostCounts(counts);
+      }
+
       setLoading(false);
     }
     load();
@@ -245,6 +294,13 @@ export default function Profile() {
       {/* Contenuto */}
       <div className="zz-content" style={{ minHeight: "100vh", background: "#0a0a0a", paddingBottom: 100 }}>
 
+        {loadError && (
+          <div style={{ margin: "12px 24px 0", padding: "12px 16px", borderRadius: 12, background: "rgba(255,77,77,.1)", border: "1px solid rgba(255,77,77,.3)", color: "#FF4D4D", fontSize: 13 }}>
+            ⚠️ {loadError}
+            <div style={{ color: "rgba(255,255,255,.5)", fontSize: 11, marginTop: 4 }}>Apri la console del browser (F12) per maggiori dettagli, e verifica le colonne <code>text_bg_color</code> / <code>text_aspect</code> nel DB.</div>
+          </div>
+        )}
+
         {/* Cover */}
         <div style={{ position: "relative", height: 200, background: "linear-gradient(135deg, #1a0000 0%, #2a0808 50%, #0a0a0a 100%)" }}>
           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: .2 }} viewBox="0 0 600 200" preserveAspectRatio="xMidYMid slice">
@@ -322,6 +378,7 @@ export default function Profile() {
             { key: "foto", label: "Foto" },
             { key: "testo", label: "Testo" },
             { key: "preferiti", label: "⭐ Salvati" },
+            { key: "audio", label: "🎵 Audio" },
             { key: "prodotti", label: "🛍 Prodotti" },
           ].map((tab) => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
@@ -332,7 +389,51 @@ export default function Profile() {
         </div>
 
         {/* Tab prodotti */}
-        {activeTab === "prodotti" ? (
+        {activeTab === "audio" ? (
+          <div style={{ padding: "16px 24px" }}>
+            <div style={{ color: "rgba(255,255,255,.4)", fontSize: 12, marginBottom: 16 }}>
+              {audioFavorites.length} audio salvat{audioFavorites.length === 1 ? "o" : "i"}
+            </div>
+            {audioFavorites.length === 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 0", gap: 12 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,200,0,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#FFD700" strokeWidth="1.5"><path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.6 5.05 17.2 6 11.7 2 7.8l5.5-.8L10 2z" strokeLinejoin="round" /></svg>
+                </div>
+                <p style={{ color: "rgba(255,255,255,.3)", fontSize: 13, textAlign: "center", lineHeight: 1.6 }}>
+                  Nessun audio salvato.<br />
+                  Quando ascolti un audio nel feed, tocca <span style={{ color: "#FFD700" }}>★</span> per aggiungerlo qui.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {audioFavorites.map((a: any) => {
+                  const count = audioPostCounts[a.id] || 0;
+                  return (
+                    <button key={a.id} type="button" onClick={() => {
+                      try {
+                        sessionStorage.setItem("zz_preselected_audio", JSON.stringify({ id: a.id, title: a.title, artist: a.artist, url: a.url, duration: a.duration }));
+                      } catch {}
+                      window.location.href = "/create";
+                    }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, background: "#111", border: "0.5px solid rgba(255,255,255,.07)", cursor: "pointer", textAlign: "left", width: "100%" }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 10, background: "linear-gradient(135deg, #FF4D4D, #c33)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.5"><circle cx="4" cy="12" r="2" /><circle cx="12" cy="10" r="2" /><path d="M6 12V4l8-2v8" strokeLinecap="round" /></svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</div>
+                        <div style={{ color: "rgba(255,255,255,.5)", fontSize: 11, marginTop: 2 }}>
+                          {a.artist} · {count} post
+                          {a.source === "user" && <span style={{ marginLeft: 6, color: "#4dffb8" }}>· originale</span>}
+                        </div>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,.4)" strokeWidth="1.6"><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : activeTab === "prodotti" ? (
           <div style={{ padding: "16px 24px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ color: "rgba(255,255,255,.4)", fontSize: 12 }}>{products.length} prodott{products.length === 1 ? "o" : "i"} pubblicat{products.length === 1 ? "o" : "i"}</div>
