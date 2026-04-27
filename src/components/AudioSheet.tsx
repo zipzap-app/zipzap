@@ -37,12 +37,16 @@ export default function AudioSheet({
   fallbackTitle,
   fallbackArtist,
   fallbackUrl,
+  postId,
+  postOwnerId,
   onClose,
 }: {
   audioId: string | null;
   fallbackTitle?: string | null;
   fallbackArtist?: string | null;
   fallbackUrl?: string | null;
+  postId?: string;
+  postOwnerId?: string;
   onClose: () => void;
 }) {
   const [audio, setAudio] = useState<AudioRow | null>(null);
@@ -146,16 +150,60 @@ export default function AudioSheet({
   }
 
   async function toggleFavorite() {
-    if (!audio || audio.id === "fallback") return;
+    if (!audio) return;
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
-    if (isFavorite) {
-      await supabase.from("audio_favorites").delete().eq("user_id", user.id).eq("audio_id", audio.id);
-      setIsFavorite(false);
+
+    // Caso normale: audio già nel DB
+    if (audio.id !== "fallback") {
+      if (isFavorite) {
+        await supabase.from("audio_favorites").delete().eq("user_id", user.id).eq("audio_id", audio.id);
+        setIsFavorite(false);
+      } else {
+        await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: audio.id });
+        setIsFavorite(true);
+      }
+      return;
+    }
+
+    // Caso fallback: l'audio non è in DB, lo creo o trovo via URL
+    if (!audio.url) return;
+
+    // Cerca se esiste già un audio con la stessa URL
+    let resolvedId: string | null = null;
+    const { data: existing } = await supabase
+      .from("audios")
+      .select("id")
+      .eq("url", audio.url)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      resolvedId = existing.id;
     } else {
-      await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: audio.id });
-      setIsFavorite(true);
+      // Crea nuova riga audio
+      const { data: newAudio } = await supabase.from("audios").insert({
+        title: audio.title || "Audio",
+        artist: audio.artist || "",
+        url: audio.url,
+        uploader_id: user.id,
+        source: "user",
+      }).select().single();
+      if (newAudio) resolvedId = newAudio.id;
+    }
+
+    if (!resolvedId) return;
+
+    // Aggiungi ai preferiti
+    await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: resolvedId });
+    setIsFavorite(true);
+    // Aggiorna lo stato locale dell'audio così non ricade più nel ramo "fallback"
+    setAudio(prev => prev ? { ...prev, id: resolvedId! } : prev);
+
+    // Se il post è dell'utente corrente, aggiorna anche il post col nuovo audio_id
+    if (postId && postOwnerId === user.id) {
+      await supabase.from("posts").update({ audio_id: resolvedId }).eq("id", postId);
     }
   }
 
@@ -238,8 +286,7 @@ export default function AudioSheet({
               </button>
               <button onClick={toggleFavorite} type="button"
                 title={isFavorite ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                disabled={audio.id === "fallback"}
-                style={{ width: 50, padding: "12px 0", borderRadius: 14, background: isFavorite ? "rgba(255,200,0,.15)" : "rgba(255,255,255,.06)", border: isFavorite ? "1px solid rgba(255,200,0,.4)" : "1px solid rgba(255,255,255,.1)", cursor: audio.id === "fallback" ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: audio.id === "fallback" ? .4 : 1 }}>
+                style={{ width: 50, padding: "12px 0", borderRadius: 14, background: isFavorite ? "rgba(255,200,0,.15)" : "rgba(255,255,255,.06)", border: isFavorite ? "1px solid rgba(255,200,0,.4)" : "1px solid rgba(255,255,255,.1)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill={isFavorite ? "#FFD700" : "none"} stroke={isFavorite ? "#FFD700" : "rgba(255,255,255,.7)"} strokeWidth="1.5">
                   <path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.6 5.05 17.2 6 11.7 2 7.8l5.5-.8L10 2z" strokeLinejoin="round" />
                 </svg>

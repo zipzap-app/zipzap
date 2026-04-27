@@ -409,6 +409,26 @@ export default function Feed() {
           .maybeSingle();
         setAudioFav(!!favData);
         setAudioFavLoaded(post.audioId);
+      } else if (post.musicUrl) {
+        // Audio legacy: cerca via URL
+        const { data: aRow } = await supabase
+          .from("audios")
+          .select("id")
+          .eq("url", post.musicUrl)
+          .limit(1)
+          .maybeSingle();
+        if (aRow) {
+          const { data: favData } = await supabase
+            .from("audio_favorites")
+            .select("audio_id")
+            .eq("user_id", user.id)
+            .eq("audio_id", aRow.id)
+            .maybeSingle();
+          setAudioFav(!!favData);
+        } else {
+          setAudioFav(false);
+        }
+        setAudioFavLoaded(post.musicUrl);
       } else {
         setAudioFav(false);
         setAudioFavLoaded(null);
@@ -419,16 +439,50 @@ export default function Feed() {
 
   async function toggleAudioFav() {
     const post = posts[current];
-    if (!post?.audioId) return;
+    if (!post) return;
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
-    if (audioFav) {
-      await supabase.from("audio_favorites").delete().eq("user_id", user.id).eq("audio_id", post.audioId);
-      setAudioFav(false);
+
+    // Caso normale: audioId già presente
+    if (post.audioId) {
+      if (audioFav) {
+        await supabase.from("audio_favorites").delete().eq("user_id", user.id).eq("audio_id", post.audioId);
+        setAudioFav(false);
+      } else {
+        await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: post.audioId });
+        setAudioFav(true);
+      }
+      return;
+    }
+
+    // Caso fallback: cerca o crea audio via URL
+    if (!post.musicUrl) return;
+    let resolvedId: string | null = null;
+    const { data: existing } = await supabase
+      .from("audios")
+      .select("id")
+      .eq("url", post.musicUrl)
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      resolvedId = existing.id;
     } else {
-      await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: post.audioId });
-      setAudioFav(true);
+      const { data: newAudio } = await supabase.from("audios").insert({
+        title: post.musicTitle || "Audio",
+        artist: post.musicArtist || "",
+        url: post.musicUrl,
+        uploader_id: user.id,
+        source: "user",
+      }).select().single();
+      if (newAudio) resolvedId = newAudio.id;
+    }
+    if (!resolvedId) return;
+    await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: resolvedId });
+    setAudioFav(true);
+    // Se il post è dell'utente, aggiorna anche il post col nuovo audio_id
+    if (post.userId === user.id) {
+      await supabase.from("posts").update({ audio_id: resolvedId }).eq("id", post.id);
     }
   }
 
@@ -715,7 +769,7 @@ export default function Feed() {
                 <span style={{ color: "#fff", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.musicTitle} · {post.musicArtist}</span>
                 <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" style={{ flexShrink: 0 }}><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
-              {post.audioId && (
+              {(post.audioId || post.musicUrl) && (
                 <button onClick={toggleAudioFav} type="button"
                   title={audioFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
                   style={{ width: 32, height: 32, borderRadius: "50%", background: audioFav ? "rgba(255,200,0,.18)" : "rgba(0,0,0,.5)", border: audioFav ? "1px solid rgba(255,200,0,.45)" : "1px solid rgba(255,255,255,.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -892,6 +946,8 @@ export default function Feed() {
           fallbackTitle={post.musicTitle}
           fallbackArtist={post.musicArtist}
           fallbackUrl={post.musicUrl}
+          postId={post.id}
+          postOwnerId={post.userId}
           onClose={() => setShowAudioSheet(false)}
         />
       )}
