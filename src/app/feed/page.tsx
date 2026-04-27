@@ -126,6 +126,8 @@ export default function Feed() {
   const [showShare, setShowShare] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
   const [showAudioSheet, setShowAudioSheet] = useState(false);
+  const [audioFav, setAudioFav] = useState(false);
+  const [audioFavLoaded, setAudioFavLoaded] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -397,9 +399,38 @@ export default function Feed() {
       ]);
       setLiked(!!likeData); setBookmarked(!!bookmarkData); setLikesCount(post.likes);
       await supabase.from("views").upsert({ post_id: post.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+      // Carica stato preferito audio
+      if (post.audioId) {
+        const { data: favData } = await supabase
+          .from("audio_favorites")
+          .select("audio_id")
+          .eq("user_id", user.id)
+          .eq("audio_id", post.audioId)
+          .maybeSingle();
+        setAudioFav(!!favData);
+        setAudioFavLoaded(post.audioId);
+      } else {
+        setAudioFav(false);
+        setAudioFavLoaded(null);
+      }
     }
     loadPostState();
   }, [current, posts]);
+
+  async function toggleAudioFav() {
+    const post = posts[current];
+    if (!post?.audioId) return;
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { window.location.href = "/login"; return; }
+    if (audioFav) {
+      await supabase.from("audio_favorites").delete().eq("user_id", user.id).eq("audio_id", post.audioId);
+      setAudioFav(false);
+    } else {
+      await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: post.audioId });
+      setAudioFav(true);
+    }
+  }
 
   async function toggleLike() {
     const post = posts[current];
@@ -675,14 +706,25 @@ export default function Feed() {
           </div>
           {post.caption && <p style={{ color: "#fff", fontSize: 14, lineHeight: 1.55, maxWidth: 400, textShadow: "0 1px 6px rgba(0,0,0,.8)" }}>{post.caption}</p>}
           {post.musicTitle && (
-            <button onClick={() => setShowAudioSheet(true)} type="button"
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(0,0,0,.5)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 20, padding: "5px 12px 5px 8px", cursor: "pointer", maxWidth: 280 }}>
-              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg, #FF4D4D, #c33)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.6"><circle cx="4" cy="12" r="2" /><circle cx="12" cy="10" r="2" /><path d="M6 12V4l8-2v8" strokeLinecap="round" /></svg>
-              </div>
-              <span style={{ color: "#fff", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.musicTitle} · {post.musicArtist}</span>
-              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" style={{ flexShrink: 0 }}><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button onClick={() => setShowAudioSheet(true)} type="button"
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(0,0,0,.5)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 20, padding: "5px 12px 5px 8px", cursor: "pointer", maxWidth: 240 }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg, #FF4D4D, #c33)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.6"><circle cx="4" cy="12" r="2" /><circle cx="12" cy="10" r="2" /><path d="M6 12V4l8-2v8" strokeLinecap="round" /></svg>
+                </div>
+                <span style={{ color: "#fff", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{post.musicTitle} · {post.musicArtist}</span>
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.6" style={{ flexShrink: 0 }}><path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              {post.audioId && (
+                <button onClick={toggleAudioFav} type="button"
+                  title={audioFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                  style={{ width: 32, height: 32, borderRadius: "50%", background: audioFav ? "rgba(255,200,0,.18)" : "rgba(0,0,0,.5)", border: audioFav ? "1px solid rgba(255,200,0,.45)" : "1px solid rgba(255,255,255,.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill={audioFav ? "#FFD700" : "none"} stroke={audioFav ? "#FFD700" : "rgba(255,255,255,.7)"} strokeWidth="1.5">
+                    <path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.6 5.05 17.2 6 11.7 2 7.8l5.5-.8L10 2z" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
           )}
           {isCarousel && <span style={{ color: "rgba(255,255,255,.5)", fontSize: 11 }}>📷 {allMedia.length} foto</span>}
           {post.hasLink && post.linkName && (

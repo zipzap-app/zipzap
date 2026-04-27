@@ -914,11 +914,13 @@ export default function Create() {
   const [showTextEditor, setShowTextEditor] = useState(false);
 
   const [showMusic, setShowMusic] = useState(false);
-  const [musicTab, setMusicTab] = useState<"library" | "original">("library");
+  const [musicTab, setMusicTab] = useState<"library" | "original" | "favorites">("library");
   const [selectedTrack, setSelectedTrack] = useState<{ id: string; title: string; artist: string; url?: string } | null>(null);
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
+  const [favoriteAudioIds, setFavoriteAudioIds] = useState<Set<string>>(new Set());
+  const [favoriteAudios, setFavoriteAudios] = useState<{ id: string; title: string; artist: string; url: string; duration: number | null; source: string }[]>([]);
 
   const [visibility, setVisibility] = useState<"public" | "friends" | "private">("public");
   const [textBgColor, setTextBgColor] = useState<string>("#1a0030");
@@ -953,6 +955,41 @@ export default function Create() {
       }
     } catch {}
   }, []);
+
+  // Carica preferiti audio dell'utente
+  useEffect(() => {
+    async function loadFavorites() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("audio_favorites")
+        .select("audio_id, audios(id, title, artist, url, duration, source)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (data) {
+        const audios = data.map((f: any) => f.audios).filter(Boolean);
+        setFavoriteAudios(audios);
+        setFavoriteAudioIds(new Set(audios.map((a: any) => a.id)));
+      }
+    }
+    loadFavorites();
+  }, []);
+
+  async function toggleFavoriteAudio(audio: { id: string; title: string; artist: string; url: string; duration?: number | null; source?: string }) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { window.location.href = "/login"; return; }
+    if (favoriteAudioIds.has(audio.id)) {
+      await supabase.from("audio_favorites").delete().eq("user_id", user.id).eq("audio_id", audio.id);
+      setFavoriteAudioIds(prev => { const n = new Set(prev); n.delete(audio.id); return n; });
+      setFavoriteAudios(prev => prev.filter(a => a.id !== audio.id));
+    } else {
+      await supabase.from("audio_favorites").insert({ user_id: user.id, audio_id: audio.id });
+      setFavoriteAudioIds(prev => new Set(prev).add(audio.id));
+      setFavoriteAudios(prev => [{ id: audio.id, title: audio.title, artist: audio.artist, url: audio.url, duration: audio.duration ?? null, source: audio.source || "library" }, ...prev]);
+    }
+  }
 
   function handleMediaChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1420,10 +1457,10 @@ export default function Create() {
           {showMusic && (
             <div>
               <div style={{ display: "flex", borderBottom: "0.5px solid rgba(255,255,255,.08)" }}>
-                {(["library", "original"] as const).map((tab) => (
+                {(["library", "original", "favorites"] as const).map((tab) => (
                   <button key={tab} onClick={() => setMusicTab(tab)}
                     style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, color: musicTab === tab ? "#fff" : "rgba(255,255,255,.3)", background: "transparent", border: "none", borderBottom: musicTab === tab ? "2px solid #FF4D4D" : "2px solid transparent", cursor: "pointer" }}>
-                    {tab === "library" ? "Libreria" : "Il mio audio"}
+                    {tab === "library" ? "Libreria" : tab === "original" ? "Il mio audio" : `★ Preferiti${favoriteAudios.length > 0 ? ` (${favoriteAudios.length})` : ""}`}
                   </button>
                 ))}
               </div>
@@ -1433,9 +1470,10 @@ export default function Create() {
                   {libraryTracks.map((track) => {
                     const isPlaying = playingId === track.id;
                     const isSelected = selectedTrack?.id === track.id;
+                    const isFav = favoriteAudioIds.has(track.id);
                     const prog = progress[track.id] || 0;
                     return (
-                      <div key={track.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "0.5px solid rgba(255,255,255,.05)", background: isSelected ? "rgba(255,77,77,.06)" : "transparent" }}>
+                      <div key={track.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "0.5px solid rgba(255,255,255,.05)", background: isSelected ? "rgba(255,77,77,.06)" : "transparent" }}>
                         <button onClick={() => togglePreview(track)}
                           style={{ width: 40, height: 40, borderRadius: "50%", background: isPlaying ? "#FF4D4D" : "rgba(255,255,255,.08)", border: isPlaying ? "none" : "1px solid rgba(255,255,255,.1)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           {isPlaying ? (
@@ -1458,6 +1496,13 @@ export default function Create() {
                             </div>
                           )}
                         </div>
+                        <button onClick={() => toggleFavoriteAudio({ id: track.id, title: track.title, artist: track.artist, url: track.url, duration: track.duration, source: "library" })}
+                          title={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                          style={{ width: 32, height: 32, borderRadius: 8, background: isFav ? "rgba(255,200,0,.15)" : "rgba(255,255,255,.06)", border: isFav ? "1px solid rgba(255,200,0,.4)" : "1px solid rgba(255,255,255,.1)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 20 20" fill={isFav ? "#FFD700" : "none"} stroke={isFav ? "#FFD700" : "rgba(255,255,255,.7)"} strokeWidth="1.5">
+                            <path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.6 5.05 17.2 6 11.7 2 7.8l5.5-.8L10 2z" strokeLinejoin="round" />
+                          </svg>
+                        </button>
                         <button onClick={() => selectTrack(track)}
                           style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", background: isSelected ? "rgba(29,158,117,.2)" : "rgba(255,255,255,.08)", color: isSelected ? "#4dffb8" : "rgba(255,255,255,.5)", border: isSelected ? "1px solid rgba(29,158,117,.3)" : "1px solid transparent" }}>
                           {isSelected ? "✓" : "Usa"}
@@ -1465,6 +1510,55 @@ export default function Create() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {musicTab === "favorites" && (
+                <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                  {favoriteAudios.length === 0 ? (
+                    <div style={{ padding: "40px 24px", textAlign: "center", color: "rgba(255,255,255,.35)", fontSize: 13, lineHeight: 1.6 }}>
+                      Nessun audio preferito.<br />Tocca <span style={{ color: "#FFD700" }}>★</span> nella Libreria o nel feed per aggiungerli qui.
+                    </div>
+                  ) : (
+                    favoriteAudios.map((track: any) => {
+                      const isPlaying = playingId === track.id;
+                      const isSelected = selectedTrack?.id === track.id;
+                      const prog = progress[track.id] || 0;
+                      return (
+                        <div key={track.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "0.5px solid rgba(255,255,255,.05)", background: isSelected ? "rgba(255,77,77,.06)" : "transparent" }}>
+                          <button onClick={() => togglePreview(track)}
+                            style={{ width: 40, height: 40, borderRadius: "50%", background: isPlaying ? "#FF4D4D" : "rgba(255,255,255,.08)", border: isPlaying ? "none" : "1px solid rgba(255,255,255,.1)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {isPlaying ? (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="2" width="4" height="10" rx="1" fill="#fff" /><rect x="8" y="2" width="4" height="10" rx="1" fill="#fff" /></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 2l8 5-8 5V2z" fill="rgba(255,255,255,.7)" /></svg>
+                            )}
+                          </button>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: "#fff", fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.title}</div>
+                            <div style={{ color: "rgba(255,255,255,.35)", fontSize: 11, marginTop: 2 }}>
+                              {track.artist}{track.duration ? ` · ${formatDuration(track.duration)}` : ""}
+                              {track.source === "user" && <span style={{ marginLeft: 6, color: "#4dffb8" }}>· originale</span>}
+                            </div>
+                            {isPlaying && (
+                              <div style={{ marginTop: 6, borderRadius: 4, overflow: "hidden", height: 3, background: "rgba(255,255,255,.1)" }}>
+                                <div style={{ height: "100%", borderRadius: 4, background: "#FF4D4D", width: `${prog}%`, transition: "width .2s" }} />
+                              </div>
+                            )}
+                          </div>
+                          <button onClick={() => toggleFavoriteAudio(track)}
+                            title="Rimuovi dai preferiti"
+                            style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,200,0,.15)", border: "1px solid rgba(255,200,0,.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <svg width="14" height="14" viewBox="0 0 20 20" fill="#FFD700" stroke="#FFD700" strokeWidth="1.5"><path d="M10 2l2.5 5 5.5.8-4 3.9.95 5.5L10 14.6 5.05 17.2 6 11.7 2 7.8l5.5-.8L10 2z" strokeLinejoin="round" /></svg>
+                          </button>
+                          <button onClick={() => selectTrack({ id: track.id, title: track.title, artist: track.artist, duration: track.duration || 0, url: track.url })}
+                            style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", background: isSelected ? "rgba(29,158,117,.2)" : "rgba(255,255,255,.08)", color: isSelected ? "#4dffb8" : "rgba(255,255,255,.5)", border: isSelected ? "1px solid rgba(29,158,117,.3)" : "1px solid transparent" }}>
+                            {isSelected ? "✓" : "Usa"}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
 
