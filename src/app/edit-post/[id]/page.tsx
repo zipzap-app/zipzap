@@ -536,7 +536,7 @@ function TextOverlayEditor({
                   fontStyle: el.italic ? "italic" : "normal",
                   textAlign: el.align,
                   display: "block",
-                  whiteSpace: mediaType === "text" ? "normal" : "nowrap",
+                  whiteSpace: mediaType === "text" ? "pre-wrap" : "pre-line",
                   wordBreak: mediaType === "text" ? "break-word" : "normal",
                   lineHeight: mediaType === "text" ? 1.3 : 1.2,
                 }}>
@@ -912,6 +912,12 @@ export default function EditPost() {
   const audioInputRef = useRef<HTMLInputElement>(null);
   const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const loadedRef = useRef(false);
+  const selectedTrackRef = useRef<{ id: string; title: string; artist: string; url?: string } | null>(null);
+  const uploadedAudioRef = useRef<File | null>(null);
+
+  // Mantengo i ref sempre sincronizzati con lo state per evitare closure stale
+  useEffect(() => { selectedTrackRef.current = selectedTrack; }, [selectedTrack]);
+  useEffect(() => { uploadedAudioRef.current = uploadedAudio; }, [uploadedAudio]);
 
   useEffect(() => {
     if (loadedRef.current || !postId) return;
@@ -971,6 +977,8 @@ export default function EditPost() {
 
   function selectTrack(track: typeof libraryTracks[0]) {
     stopPreview();
+    selectedTrackRef.current = track; // sync immediato
+    uploadedAudioRef.current = null;
     setSelectedTrack(track);
     setUploadedAudio(null);
     setShowMusic(false);
@@ -979,8 +987,11 @@ export default function EditPost() {
   function handleAudioUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const newTrack = { id: "original", title: file.name.replace(/\.[^.]+$/, ""), artist: "Il mio audio" };
+    uploadedAudioRef.current = file;
+    selectedTrackRef.current = newTrack;
     setUploadedAudio(file);
-    setSelectedTrack({ id: "original", title: file.name.replace(/\.[^.]+$/, ""), artist: "Il mio audio" });
+    setSelectedTrack(newTrack);
     setShowMusic(false);
     stopPreview();
   }
@@ -994,21 +1005,28 @@ export default function EditPost() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "/login"; return; }
 
-    let musicUrl = selectedTrack?.url || null;
-    let musicTitle = selectedTrack?.title || null;
-    let musicArtist = selectedTrack?.artist || null;
+    // Leggo dai ref per evitare closure stale
+    const currentTrack = selectedTrackRef.current;
+    const currentUploaded = uploadedAudioRef.current;
 
-    if (uploadedAudio) {
-      const ext = uploadedAudio.name.split(".").pop();
+    let musicUrl: string | null = currentTrack?.url || null;
+    let musicTitle: string | null = currentTrack?.title || null;
+    let musicArtist: string | null = currentTrack?.artist || null;
+
+    if (currentUploaded) {
+      const ext = currentUploaded.name.split(".").pop();
       const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error, data } = await supabase.storage.from("audio").upload(path, uploadedAudio, { upsert: true });
+      const { error, data } = await supabase.storage.from("audio").upload(path, currentUploaded, { upsert: true });
       if (!error && data) {
         const { data: urlData } = supabase.storage.from("audio").getPublicUrl(path);
         musicUrl = urlData.publicUrl;
-        musicTitle = uploadedAudio.name.replace(/\.[^.]+$/, "");
+        musicTitle = currentUploaded.name.replace(/\.[^.]+$/, "");
         musicArtist = "Il mio audio";
       }
     }
+
+    // Diagnostica visibile (rimuovere dopo aver verificato)
+    console.log("[ZipZap save]", { currentTrack, currentUploaded: !!currentUploaded, musicUrl, musicTitle, musicArtist });
 
     const updateObj: Record<string, any> = {
       caption, link_url: linkUrl || null, visibility,
@@ -1114,7 +1132,7 @@ export default function EditPost() {
               const ds = getDisplayStyle(el);
               return (
                 <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, pointerEvents: "none" }}>
-                  <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.65, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
+                  <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.65, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "pre-line" }}>
                     {el.text}
                   </span>
                 </div>
