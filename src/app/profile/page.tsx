@@ -22,6 +22,9 @@ type Post = {
   comments_count: number;
   views_count: number;
   visibility: string;
+  updated_at?: string;
+  text_bg_color?: string;
+  text_aspect?: string;
 };
 
 type Product = {
@@ -42,6 +45,13 @@ function formatCount(n: number) {
   return String(n);
 }
 
+// Aspect ratio CSS dal valore stringa salvato
+function aspectFromString(s?: string) {
+  if (s === "1:1") return "1 / 1";
+  if (s === "4:5") return "4 / 5";
+  return "9 / 16"; // default
+}
+
 export default function Profile() {
   const [activeTab, setActiveTab] = useState("video");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -59,6 +69,18 @@ export default function Profile() {
   const [editLinkUrl, setEditLinkUrl] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Listener per refresh forzato dall'URL (es. ?refresh=12345 dopo salvataggio in /edit-post)
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("refresh")) {
+      url.searchParams.delete("refresh");
+      window.history.replaceState({}, "", url.pathname + (url.search || ""));
+      setRefreshKey(k => k + 1);
+    }
+  }, []);
+
   useEffect(() => {
     async function load() {
       const supabase = createClient();
@@ -73,21 +95,21 @@ export default function Profile() {
         { data: productsData },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count, visibility, link_url").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("posts").select("id, type, media_url, caption, likes_count, comments_count, views_count, visibility, link_url, updated_at, text_bg_color, text_aspect, overlay_data").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
-        supabase.from("bookmarks").select("post_id, posts(id, type, media_url, caption, likes_count, comments_count, views_count, visibility)").eq("user_id", user.id),
+        supabase.from("bookmarks").select("post_id, posts(id, type, media_url, caption, likes_count, comments_count, views_count, visibility, updated_at, text_bg_color, text_aspect, overlay_data)").eq("user_id", user.id),
         supabase.from("products").select("*").eq("seller_id", user.id).order("created_at", { ascending: false }),
       ]);
 
       if (profileData) setProfile(profileData);
-      if (postsData) setPosts(postsData);
+      if (postsData) setPosts(postsData as any);
       if (bookmarksData) setBookmarks(bookmarksData.map((b: any) => b.posts).filter(Boolean));
       if (productsData) setProducts(productsData);
       setFollowersCount(followers || 0);
       setLoading(false);
     }
     load();
-  }, []);
+  }, [refreshKey]);
 
   const initials = profile?.full_name?.[0]?.toUpperCase() || profile?.username?.[0]?.toUpperCase() || "?";
 
@@ -102,6 +124,14 @@ export default function Profile() {
 
   function openPostInFeed(postId: string) {
     window.location.href = `/feed?postId=${postId}`;
+  }
+
+  // Cache busting: aggiunge ?v=updated_at all'URL del media così le modifiche sono visibili subito
+  function withCacheBust(url: string, post: Post) {
+    if (!url) return url;
+    const ts = post.updated_at ? new Date(post.updated_at).getTime() : 0;
+    if (!ts) return url;
+    return url + (url.includes("?") ? "&" : "?") + "v=" + ts;
   }
 
   async function savePostEdit() {
@@ -368,12 +398,12 @@ export default function Profile() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, marginTop: 2 }}>
               {filteredPosts.map((p) => (
-                <div key={p.id} onClick={() => openPostInFeed(p.id)} style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
-                  {p.media_url && p.type === "video" && <video src={p.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />}
-                  {p.media_url && p.type === "photo" && <img src={p.media_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                <div key={`${p.id}-${p.updated_at || ""}`} onClick={() => openPostInFeed(p.id)} style={{ position: "relative", aspectRatio: ".56", background: "#1a1a1a", overflow: "hidden", cursor: "pointer" }}>
+                  {p.media_url && p.type === "video" && <video src={withCacheBust(p.media_url, p)} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />}
+                  {p.media_url && p.type === "photo" && <img src={withCacheBust(p.media_url, p)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
                   {!p.media_url && (
-                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1a1a2e, #0a0a1a)", padding: 8 }}>
-                      <span style={{ color: "rgba(255,255,255,.25)", fontSize: 11, textAlign: "center" }}>{p.caption?.slice(0, 40)}</span>
+                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 8, background: p.text_bg_color || "linear-gradient(135deg, #1a1a2e, #0a0a1a)" }}>
+                      <span style={{ color: p.text_bg_color ? "#fff" : "rgba(255,255,255,.5)", fontSize: 11, textAlign: "center", fontWeight: 600, lineHeight: 1.4, wordBreak: "break-word" }}>{p.caption?.slice(0, 50)}</span>
                     </div>
                   )}
                   <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%)" }} />

@@ -55,6 +55,8 @@ type Post = {
   overlayPosition: string;
   overlayData: any[] | null;
   visibility: string;
+  textBgColor?: string | null;
+  textAspect?: string | null;
 };
 
 const mockPosts: Post[] = [
@@ -188,6 +190,8 @@ export default function Feed() {
       overlayPosition: p.overlay_position || "bottom",
       overlayData: Array.isArray(p.overlay_data) && p.overlay_data.length > 0 ? p.overlay_data : null,
       visibility: p.visibility || "public",
+      textBgColor: p.text_bg_color || null,
+      textAspect: p.text_aspect || null,
     };
   }
 
@@ -511,11 +515,17 @@ export default function Feed() {
         }
       `}</style>
 
-      <div style={{ position: "absolute", inset: 0, zIndex: 0, background: `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: currentMedia ? 0.3 : 1 }} />
+      <div style={{ position: "absolute", inset: 0, zIndex: 0, background: post.postType === "text" && post.textBgColor ? `linear-gradient(160deg, ${post.textBgColor} 0%, #000 120%)` : `linear-gradient(160deg, ${post.color} 0%, #000 100%)`, opacity: post.postType === "text" || currentMedia ? 1 : 1 }} />
 
       {/* Area video con stage ad aspect ratio dinamico */}
-      <div className="zz-video-area" style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
-        <div className="zz-stage" style={{ position: "relative", height: "100%", aspectRatio: String(aspectRatio), maxWidth: "100%", maxHeight: "100%", overflow: "hidden", background: "#000" }}>
+      <div className="zz-video-area" style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: post.postType === "text" && post.textBgColor ? "transparent" : "#000" }}>
+        {(() => {
+          const stageAspect = post.postType === "text"
+            ? (post.textAspect === "1:1" ? 1 : post.textAspect === "4:5" ? 4 / 5 : 9 / 16)
+            : aspectRatio;
+          const stageBg = post.postType === "text" ? (post.textBgColor || "#1a0030") : "#000";
+          return (
+        <div className="zz-stage" style={{ position: "relative", height: "100%", aspectRatio: String(stageAspect), maxWidth: "100%", maxHeight: "100%", overflow: "hidden", background: stageBg }}>
           {currentMedia && (post.postType === "video" ? (
             <video ref={videoRef} key={`${post.id}-${current}`} src={currentMedia}
               onClick={handleMediaClick}
@@ -530,9 +540,10 @@ export default function Feed() {
               style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer", display: "block" }} />
           ))}
 
-          {/* Overlay scuro per leggibilità testi */}
-          <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.25) 100%)", pointerEvents: "none" }} />
-
+          {/* Overlay scuro per leggibilità testi (solo per video/foto) */}
+          {post.postType !== "text" && (
+            <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.25) 100%)", pointerEvents: "none" }} />
+          )}
           {/* Frecce carosello */}
           {isCarousel && carouselIndex > 0 && (
             <button onClick={(e) => { e.stopPropagation(); setCarouselIndex(c => c - 1); }}
@@ -583,9 +594,10 @@ export default function Feed() {
               })
               .map((el: any) => {
                 const ds = getDisplayStyle(el);
+                const isTextPost = post.postType === "text";
                 return (
-                  <div key={el.id} style={{ position: "absolute", zIndex: 17, left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss, background: ds.bgRgba, border: ds.borderCss, borderRadius: 6, pointerEvents: "none", maxWidth: "70%" }}>
-                    <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "nowrap" }}>{el.text}</span>
+                  <div key={el.id} style={{ position: "absolute", zIndex: 17, left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss, background: ds.bgRgba, border: ds.borderCss, borderRadius: 6, pointerEvents: "none", maxWidth: isTextPost ? "85%" : "70%", textAlign: "center" }}>
+                    <span style={{ color: el.color || "#fff", fontFamily: FONT_FAMILIES[el.font] || "-apple-system, sans-serif", fontSize: el.size || 20, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: isTextPost ? "normal" : "nowrap", wordBreak: isTextPost ? "break-word" : "normal", lineHeight: isTextPost ? 1.3 : 1.2 }}>{el.text}</span>
                   </div>
                 );
               })
@@ -604,6 +616,8 @@ export default function Feed() {
             </div>
           )}
         </div>
+          );
+        })()}
       </div>
 
       {/* Frecce navigazione post desktop */}

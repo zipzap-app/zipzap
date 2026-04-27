@@ -92,6 +92,8 @@ function TextOverlayEditor({
   photoPreviews,
   carouselIndex,
   setCarouselIndex,
+  textPostBgColor,
+  textPostAspect,
 }: {
   mediaPreview: string | null;
   mediaType: "video" | "photo" | "text";
@@ -101,6 +103,8 @@ function TextOverlayEditor({
   photoPreviews?: string[];
   carouselIndex?: number;
   setCarouselIndex?: (i: number) => void;
+  textPostBgColor?: string;
+  textPostAspect?: "9:16" | "1:1" | "4:5";
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -415,7 +419,20 @@ function TextOverlayEditor({
         style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", background: "#000" }}>
 
         {/* Media di sfondo */}
-        {mediaPreview && isVideo && (
+        {mediaType === "text" ? (
+          <div
+            ref={(el) => { mediaRef.current = el as any; }}
+            style={{
+              aspectRatio: textPostAspect === "1:1" ? "1 / 1" : textPostAspect === "4:5" ? "4 / 5" : "9 / 16",
+              maxWidth: "100%",
+              maxHeight: "100%",
+              height: textPostAspect === "9:16" ? "100%" : "auto",
+              width: textPostAspect === "9:16" ? "auto" : undefined,
+              background: textPostBgColor || "#1a0030",
+              position: "relative",
+            }}
+          />
+        ) : mediaPreview && isVideo ? (
           <video
             ref={(el) => { videoRef.current = el; mediaRef.current = el; }}
             src={mediaPreview}
@@ -426,16 +443,14 @@ function TextOverlayEditor({
             onPause={() => setIsPlaying(false)}
             onPlay={() => setIsPlaying(true)}
           />
-        )}
-        {mediaPreview && mediaType === "photo" && (
+        ) : mediaPreview && mediaType === "photo" ? (
           <img
             ref={(el) => { mediaRef.current = el; }}
             src={mediaPreview}
             style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
             alt=""
           />
-        )}
-        {(!mediaPreview || mediaType === "text") && (
+        ) : (
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1a0030, #0a0a2e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {!mediaPreview && <span style={{ color: "rgba(255,255,255,.2)", fontSize: 13 }}>Anteprima</span>}
           </div>
@@ -469,8 +484,9 @@ function TextOverlayEditor({
                 padding: ds.paddingCss,
                 background: ds.bgRgba,
                 border: ds.borderCss,
-                maxWidth: "70%",
+                maxWidth: mediaType === "text" ? "85%" : "70%",
                 opacity: dimmed ? 0.4 : 1,
+                textAlign: "center",
               }}>
               {editing && isSelected ? (
                 <input
@@ -501,7 +517,9 @@ function TextOverlayEditor({
                   fontStyle: el.italic ? "italic" : "normal",
                   textAlign: el.align,
                   display: "block",
-                  whiteSpace: "nowrap",
+                  whiteSpace: mediaType === "text" ? "normal" : "nowrap",
+                  wordBreak: mediaType === "text" ? "break-word" : "normal",
+                  lineHeight: mediaType === "text" ? 1.3 : 1.2,
                 }}>
                   {el.text || "Testo"}
                 </span>
@@ -568,20 +586,42 @@ function TextOverlayEditor({
                 style={{ width: 28, height: 28, borderRadius: 7, border: selectedEl.italic ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: selectedEl.italic ? "rgba(255,77,77,.15)" : "transparent", color: selectedEl.italic ? "#FF4D4D" : "#fff", fontSize: 13, fontStyle: "italic", cursor: "pointer", fontWeight: 700 }}>I</button>
               {(() => {
                 const ds = getDisplayStyle(selectedEl);
+                const curBgOp = selectedEl.bgOpacity ?? 0.6;
+                let curState = 0;
+                if (ds.state === "bg") {
+                  if (Math.abs(curBgOp - 1.0) < 0.05) curState = 1;
+                  else if (Math.abs(curBgOp - 0.6) < 0.05) curState = 2;
+                  else if (Math.abs(curBgOp - 0.3) < 0.05) curState = 3;
+                  else curState = 1;
+                } else if (ds.state === "border") {
+                  curState = 4;
+                }
                 const cycleStyle = () => {
-                  if (ds.state === "none") {
-                    updateEl(selectedEl.id, { bg: true, borderColor: undefined, bgColor: selectedEl.bgColor || "#000000", bgOpacity: selectedEl.bgOpacity ?? 0.6 });
-                  } else if (ds.state === "bg") {
-                    updateEl(selectedEl.id, { bg: false, borderColor: selectedEl.borderColor || "#FFFFFF" });
-                  } else {
+                  const next = (curState + 1) % 5;
+                  if (next === 0) {
                     updateEl(selectedEl.id, { bg: false, borderColor: undefined });
+                  } else if (next === 1) {
+                    updateEl(selectedEl.id, { bg: true, borderColor: undefined, bgColor: selectedEl.bgColor || "#000000", bgOpacity: 1 });
+                  } else if (next === 2) {
+                    updateEl(selectedEl.id, { bg: true, borderColor: undefined, bgColor: selectedEl.bgColor || "#000000", bgOpacity: 0.6 });
+                  } else if (next === 3) {
+                    updateEl(selectedEl.id, { bg: true, borderColor: undefined, bgColor: selectedEl.bgColor || "#000000", bgOpacity: 0.3 });
+                  } else {
+                    updateEl(selectedEl.id, { bg: false, borderColor: selectedEl.borderColor || "#FFFFFF" });
                   }
                 };
-                const label = ds.state === "none" ? "Aa" : ds.state === "bg" ? "▣" : "▢";
-                const title = ds.state === "none" ? "Nessuno" : ds.state === "bg" ? "Sfondo" : "Bordo";
+                const renderIcon = () => {
+                  if (curState === 0) return <span style={{ fontSize: 12, fontWeight: 700 }}>Aa</span>;
+                  if (curState === 4) return <span style={{ display: "inline-block", width: 14, height: 14, border: "1.5px solid currentColor", borderRadius: 3 }} />;
+                  const fillOp = curState === 1 ? 1 : curState === 2 ? 0.6 : 0.3;
+                  return <span style={{ display: "inline-block", width: 14, height: 14, background: "currentColor", borderRadius: 3, opacity: fillOp }} />;
+                };
+                const titles = ["Nessuno sfondo", "Sfondo 100%", "Sfondo 60%", "Sfondo 30%", "Bordo"];
                 return (
-                  <button onClick={cycleStyle} title={title}
-                    style={{ width: 28, height: 28, borderRadius: 7, border: ds.state !== "none" ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: ds.state !== "none" ? "rgba(255,77,77,.15)" : "transparent", color: ds.state !== "none" ? "#FF4D4D" : "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{label}</button>
+                  <button onClick={cycleStyle} title={titles[curState]}
+                    style={{ width: 28, height: 28, borderRadius: 7, border: curState !== 0 ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: curState !== 0 ? "rgba(255,77,77,.15)" : "transparent", color: curState !== 0 ? "#FF4D4D" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    {renderIcon()}
+                  </button>
                 );
               })()}
               <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.1)", margin: "0 2px" }} />
@@ -606,7 +646,6 @@ function TextOverlayEditor({
               const ds = getDisplayStyle(selectedEl);
               if (ds.state === "bg") {
                 const curBgColor = selectedEl.bgColor || "#000000";
-                const curBgOp = selectedEl.bgOpacity ?? 0.6;
                 return (
                   <div style={{ display: "flex", gap: 4, alignItems: "center", borderTop: "0.5px solid rgba(255,255,255,.1)", paddingTop: 6 }}>
                     <span style={{ color: "rgba(255,255,255,.4)", fontSize: 9, fontWeight: 700, marginRight: 2 }}>SFONDO</span>
@@ -617,18 +656,6 @@ function TextOverlayEditor({
                           width: 18, height: 18, borderRadius: "50%", background: c, cursor: "pointer", padding: 0, flexShrink: 0,
                           border: curBgColor === c ? "2px solid #FF4D4D" : "1.5px solid rgba(255,255,255,.2)",
                         }} />
-                    ))}
-                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,.1)", margin: "0 4px" }} />
-                    {BG_OPACITIES.map(op => (
-                      <button key={op} onClick={() => updateEl(selectedEl.id, { bgOpacity: op })}
-                        title={`Opacità ${Math.round(op * 100)}%`}
-                        style={{
-                          width: 22, height: 18, borderRadius: 4, background: hexToRgba(curBgColor, op), cursor: "pointer", padding: 0, flexShrink: 0,
-                          border: Math.abs(curBgOp - op) < 0.05 ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.2)",
-                          color: "#fff", fontSize: 9, fontWeight: 700,
-                        }}>
-                        {Math.round(op * 100)}
-                      </button>
                     ))}
                   </div>
                 );
@@ -851,6 +878,8 @@ export default function EditPost() {
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [textBgColor, setTextBgColor] = useState<string>("#1a0030");
+  const [textAspect, setTextAspect] = useState<"9:16" | "1:1" | "4:5">("9:16");
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [showTextEditor, setShowTextEditor] = useState(false);
   const [showMusic, setShowMusic] = useState(false);
@@ -883,6 +912,8 @@ export default function EditPost() {
       } else if (data.media_url) {
         setMediaUrls([data.media_url]);
       }
+      if (data.text_bg_color) setTextBgColor(data.text_bg_color);
+      if (data.text_aspect && ["9:16", "1:1", "4:5"].includes(data.text_aspect)) setTextAspect(data.text_aspect);
       if (data.overlay_data && Array.isArray(data.overlay_data) && data.overlay_data.length > 0) {
         setTextElements(data.overlay_data);
       }
@@ -975,13 +1006,18 @@ export default function EditPost() {
       updateObj.overlay_data = null;
     }
 
+    if (postType === "text") {
+      updateObj.text_bg_color = textBgColor;
+      updateObj.text_aspect = textAspect;
+    }
+
     const { error } = await supabase.from("posts").update(updateObj).eq("id", postId).select().single();
 
     if (error) { setSaveError(`Errore: ${error.message}`); setSaving(false); return; }
 
     setSaving(false);
     setSaved(true);
-    setTimeout(() => { window.location.href = "/profile"; }, 1500);
+    setTimeout(() => { window.location.href = `/profile?refresh=${Date.now()}`; }, 1500);
   }
 
   if (showTextEditor) {
@@ -997,6 +1033,8 @@ export default function EditPost() {
         photoPreviews={isPhotoCarousel ? mediaUrls : undefined}
         carouselIndex={isPhotoCarousel ? carouselIndex : undefined}
         setCarouselIndex={isPhotoCarousel ? setCarouselIndex : undefined}
+        textPostBgColor={postType === "text" ? textBgColor : undefined}
+        textPostAspect={postType === "text" ? textAspect : undefined}
       />
     );
   }
@@ -1089,7 +1127,66 @@ export default function EditPost() {
           </div>
         )}
 
-        {!mediaUrl && (
+        {!mediaUrl && postType === "text" && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ width: "100%", display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <div style={{ position: "relative", aspectRatio: textAspect === "1:1" ? "1 / 1" : textAspect === "4:5" ? "4 / 5" : "9 / 16", maxHeight: 320, height: textAspect === "1:1" ? 240 : textAspect === "4:5" ? 280 : 320, background: textBgColor, borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,.4)" }}>
+                {textElements.map(el => {
+                  const fontObj = FONTS.find(f => f.id === el.font);
+                  const ds = getDisplayStyle(el);
+                  return (
+                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 7px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, maxWidth: "90%" }}>
+                      <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.6, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", lineHeight: 1.3 }}>
+                        {el.text}
+                      </span>
+                    </div>
+                  );
+                })}
+                {textElements.length === 0 && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.35)", fontSize: 13 }}>Anteprima vuota</div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Formato</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["9:16", "1:1", "4:5"] as const).map(ar => (
+                  <button key={ar} onClick={() => setTextAspect(ar)}
+                    style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: textAspect === ar ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: textAspect === ar ? "rgba(255,77,77,.1)" : "rgba(255,255,255,.04)", color: textAspect === ar ? "#FF4D4D" : "rgba(255,255,255,.7)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    {ar}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Sfondo del post</label>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {[...COLORS, "#1a0030", "#0a2a3a", "#3a0a0a", "#2a3a0a"].map(c => (
+                  <button key={c} onClick={() => setTextBgColor(c)}
+                    style={{ width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer", padding: 0,
+                      border: textBgColor === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.15)" }} />
+                ))}
+              </div>
+            </div>
+
+            <button onClick={() => setShowTextEditor(true)}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", cursor: "pointer" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: textElements.length > 0 ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: textElements.length > 0 ? "#FF4D4D" : "rgba(255,255,255,.6)", fontWeight: 900, fontSize: 16 }}>Aa</span>
+              </div>
+              <div style={{ textAlign: "left" }}>
+                <div style={{ color: textElements.length > 0 ? "#FF4D4D" : "#fff", fontWeight: 700, fontSize: 13 }}>
+                  {textElements.length > 0 ? `${textElements.length} testo/i` : "Apri editor testo"}
+                </div>
+                <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>Aggiungi e modifica i testi del post</div>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {!mediaUrl && postType !== "text" && (
           <button onClick={() => setShowTextEditor(true)}
             style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", cursor: "pointer", marginBottom: 16 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: textElements.length > 0 ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
