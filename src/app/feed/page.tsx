@@ -62,8 +62,8 @@ type Post = {
 };
 
 const mockPosts: Post[] = [
-  { id: "1", userId: "user-1", user: "astro.sky", initials: "AS", color: "#1a3a5c", caption: "Via Lattea dal Gran Sasso", likes: 41200, comments: 3100, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
-  { id: "2", userId: "user-2", user: "vale.beats", initials: "VB", color: "#3d0a2e", caption: "Beat in 60 secondi", likes: 98000, comments: 14000, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
+  { id: "1", userId: "user-1", user: "astro.sky", initials: "AS", color: "#1a3a5c", caption: "Via Lattea dal Gran Sasso", likes: 41200, comments: 3100, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", audioId: null, musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
+  { id: "2", userId: "user-2", user: "vale.beats", initials: "VB", color: "#3d0a2e", caption: "Beat in 60 secondi", likes: 98000, comments: 14000, hasLink: false, linkName: "", linkMeta: "", earn: "", type: "LIBERO", mediaUrl: "", mediaUrls: [], postType: "text", audioId: null, musicUrl: null, musicTitle: null, musicArtist: null, overlayText: null, overlayPosition: "bottom", overlayData: null, visibility: "public" },
 ];
 
 const colors = ["#1a3a5c", "#0d3320", "#3d0a2e", "#2a1a4a", "#1a2a0a", "#4a1a0a"];
