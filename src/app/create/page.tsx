@@ -79,7 +79,7 @@ function getDisplayStyle(el: TextElement) {
     hasBg,
     bgRgba: hasBg ? hexToRgba(bgColor, bgOpacity) : "transparent",
     borderCss: hasBorder ? `2px solid ${el.borderColor}` : "none",
-    paddingCss: (hasBg || hasBorder) ? "4px 10px" : "0",
+    paddingCss: (hasBg || hasBorder) ? "6px 6px" : "0",
     state: (hasBorder ? "border" : hasBg ? "bg" : "none") as "none" | "bg" | "border",
   };
 }
@@ -504,13 +504,22 @@ function TextOverlayEditor({
                 textAlign: "center",
               }}>
               {editing && isSelected ? (
-                <input
+                <textarea
                   autoFocus
                   value={el.text}
-                  onChange={e => updateEl(el.id, { text: e.target.value })}
+                  onChange={e => {
+                    updateEl(el.id, { text: e.target.value });
+                    e.target.style.height = "auto";
+                    e.target.style.height = e.target.scrollHeight + "px";
+                  }}
+                  onFocus={e => {
+                    e.target.style.height = "auto";
+                    e.target.style.height = e.target.scrollHeight + "px";
+                  }}
                   onBlur={() => setEditing(false)}
                   onClick={e => e.stopPropagation()}
                   onMouseDown={e => e.stopPropagation()}
+                  rows={1}
                   style={{
                     background: "transparent", border: "none", outline: "none",
                     color: el.color,
@@ -519,8 +528,16 @@ function TextOverlayEditor({
                     fontWeight: el.bold ? 700 : 400,
                     fontStyle: el.italic ? "italic" : "normal",
                     textAlign: el.align,
-                    width: Math.max(80, el.text.length * el.size * 0.6),
+                    width: "100%",
                     minWidth: 60,
+                    resize: "none",
+                    overflow: "hidden",
+                    padding: 0,
+                    margin: 0,
+                    display: "block",
+                    lineHeight: mediaType === "text" ? 1.3 : 1.2,
+                    whiteSpace: mediaType === "text" ? "pre-wrap" : "nowrap",
+                    wordBreak: mediaType === "text" ? "break-word" : "normal",
                   }}
                 />
               ) : (
@@ -1151,7 +1168,7 @@ export default function Create() {
                   const fontObj = FONTS.find(f => f.id === el.font);
                   const ds = getDisplayStyle(el);
                   return (
-                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
+                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
                       <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                         {el.text}
                       </span>
@@ -1198,7 +1215,7 @@ export default function Create() {
                     const fontObj = FONTS.find(f => f.id === el.font);
                     const ds = getDisplayStyle(el);
                     return (
-                      <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
+                      <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 4 }}>
                         <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.7, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                           {el.text}
                         </span>
@@ -1277,7 +1294,7 @@ export default function Create() {
                   const fontObj = FONTS.find(f => f.id === el.font);
                   const ds = getDisplayStyle(el);
                   return (
-                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 7px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, maxWidth: "90%" }}>
+                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, maxWidth: "90%" }}>
                       <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.6, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", lineHeight: 1.3 }}>
                         {el.text}
                       </span>

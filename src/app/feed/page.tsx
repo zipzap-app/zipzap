@@ -27,7 +27,7 @@ function getDisplayStyle(el: any) {
   return {
     bgRgba: hasBg ? hexToRgba(bgColor, bgOpacity) : "transparent",
     borderCss: hasBorder ? `2px solid ${el.borderColor}` : "none",
-    paddingCss: (hasBg || hasBorder) ? "4px 8px" : "0",
+    paddingCss: (hasBg || hasBorder) ? "6px 6px" : "0",
   };
 }
 

@@ -78,7 +78,7 @@ function getDisplayStyle(el: TextElement) {
     hasBg,
     bgRgba: hasBg ? hexToRgba(bgColor, bgOpacity) : "transparent",
     borderCss: hasBorder ? `2px solid ${el.borderColor}` : "none",
-    paddingCss: (hasBg || hasBorder) ? "4px 10px" : "0",
+    paddingCss: (hasBg || hasBorder) ? "6px 6px" : "0",
     state: (hasBorder ? "border" : hasBg ? "bg" : "none") as "none" | "bg" | "border",
   };
 }
@@ -489,13 +489,24 @@ function TextOverlayEditor({
                 textAlign: "center",
               }}>
               {editing && isSelected ? (
-                <input
+                <textarea
                   autoFocus
                   value={el.text}
-                  onChange={e => updateEl(el.id, { text: e.target.value })}
+                  onChange={e => {
+                    updateEl(el.id, { text: e.target.value });
+                    // Auto-resize altezza
+                    e.target.style.height = "auto";
+                    e.target.style.height = e.target.scrollHeight + "px";
+                  }}
+                  onFocus={e => {
+                    // Inizializza altezza al mount
+                    e.target.style.height = "auto";
+                    e.target.style.height = e.target.scrollHeight + "px";
+                  }}
                   onBlur={() => setEditing(false)}
                   onClick={e => e.stopPropagation()}
                   onMouseDown={e => e.stopPropagation()}
+                  rows={1}
                   style={{
                     background: "transparent", border: "none", outline: "none",
                     color: el.color,
@@ -504,8 +515,16 @@ function TextOverlayEditor({
                     fontWeight: el.bold ? 700 : 400,
                     fontStyle: el.italic ? "italic" : "normal",
                     textAlign: el.align,
-                    width: Math.max(80, el.text.length * el.size * 0.6),
+                    width: "100%",
                     minWidth: 60,
+                    resize: "none",
+                    overflow: "hidden",
+                    padding: 0,
+                    margin: 0,
+                    display: "block",
+                    lineHeight: mediaType === "text" ? 1.3 : 1.2,
+                    whiteSpace: mediaType === "text" ? "pre-wrap" : "nowrap",
+                    wordBreak: mediaType === "text" ? "break-word" : "normal",
                   }}
                 />
               ) : (
@@ -1094,7 +1113,7 @@ export default function EditPost() {
               const fontObj = FONTS.find(f => f.id === el.font);
               const ds = getDisplayStyle(el);
               return (
-                <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 7px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, pointerEvents: "none" }}>
+                <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, pointerEvents: "none" }}>
                   <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.65, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", whiteSpace: "nowrap" }}>
                     {el.text}
                   </span>
@@ -1129,13 +1148,13 @@ export default function EditPost() {
 
         {!mediaUrl && postType === "text" && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ width: "100%", display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <div style={{ width: "100%", display: "flex", justifyContent: "center", marginBottom: 12, position: "relative" }}>
               <div style={{ position: "relative", aspectRatio: textAspect === "1:1" ? "1 / 1" : textAspect === "4:5" ? "4 / 5" : "9 / 16", maxHeight: 320, height: textAspect === "1:1" ? 240 : textAspect === "4:5" ? 280 : 320, background: textBgColor, borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,.4)" }}>
                 {textElements.map(el => {
                   const fontObj = FONTS.find(f => f.id === el.font);
                   const ds = getDisplayStyle(el);
                   return (
-                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "3px 7px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, maxWidth: "90%" }}>
+                    <div key={el.id} style={{ position: "absolute", left: `${el.x}%`, top: `${el.y}%`, transform: el._v === 2 ? "translate(-50%, -50%)" : undefined, padding: ds.paddingCss === "0" ? 0 : "6px", background: ds.bgRgba, border: ds.borderCss, borderRadius: 5, maxWidth: "90%" }}>
                       <span style={{ color: el.color, fontFamily: fontObj?.family, fontSize: el.size * 0.6, fontWeight: el.bold ? 700 : 400, fontStyle: el.italic ? "italic" : "normal", display: "block", whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", lineHeight: 1.3 }}>
                         {el.text}
                       </span>
@@ -1145,6 +1164,11 @@ export default function EditPost() {
                 {textElements.length === 0 && (
                   <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.35)", fontSize: 13 }}>Anteprima vuota</div>
                 )}
+                {/* Bottone Aa sovrapposto come per video/foto */}
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowTextEditor(true); }}
+                  style={{ position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8, background: "rgba(0,0,0,.7)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", zIndex: 5 }}>
+                  Aa {textElements.length > 0 ? `(${textElements.length})` : ""}
+                </button>
               </div>
             </div>
 
@@ -1152,7 +1176,7 @@ export default function EditPost() {
               <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Formato</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {(["9:16", "1:1", "4:5"] as const).map(ar => (
-                  <button key={ar} onClick={() => setTextAspect(ar)}
+                  <button key={ar} type="button" onClick={() => setTextAspect(ar)}
                     style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: textAspect === ar ? "1.5px solid #FF4D4D" : "1px solid rgba(255,255,255,.1)", background: textAspect === ar ? "rgba(255,77,77,.1)" : "rgba(255,255,255,.04)", color: textAspect === ar ? "#FF4D4D" : "rgba(255,255,255,.7)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     {ar}
                   </button>
@@ -1164,23 +1188,24 @@ export default function EditPost() {
               <label style={{ color: "rgba(255,255,255,.3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", display: "block", marginBottom: 8 }}>Sfondo del post</label>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 {[...COLORS, "#1a0030", "#0a2a3a", "#3a0a0a", "#2a3a0a"].map(c => (
-                  <button key={c} onClick={() => setTextBgColor(c)}
+                  <button key={c} type="button" onClick={() => setTextBgColor(c)}
                     style={{ width: 32, height: 32, borderRadius: "50%", background: c, cursor: "pointer", padding: 0,
                       border: textBgColor === c ? "3px solid #FF4D4D" : "2px solid rgba(255,255,255,.15)" }} />
                 ))}
               </div>
             </div>
 
-            <button onClick={() => setShowTextEditor(true)}
-              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", cursor: "pointer" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: textElements.length > 0 ? "rgba(255,77,77,.2)" : "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ color: textElements.length > 0 ? "#FF4D4D" : "rgba(255,255,255,.6)", fontWeight: 900, fontSize: 16 }}>Aa</span>
+            {/* Bottone editor full-width — quello che esisteva prima ma con type="button" esplicito */}
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowTextEditor(true); }}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 16, background: "rgba(255,77,77,.08)", border: "1.5px solid rgba(255,77,77,.4)", cursor: "pointer" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,77,77,.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "#FF4D4D", fontWeight: 900, fontSize: 16 }}>Aa</span>
               </div>
               <div style={{ textAlign: "left" }}>
-                <div style={{ color: textElements.length > 0 ? "#FF4D4D" : "#fff", fontWeight: 700, fontSize: 13 }}>
-                  {textElements.length > 0 ? `${textElements.length} testo/i` : "Apri editor testo"}
+                <div style={{ color: "#FF4D4D", fontWeight: 700, fontSize: 13 }}>
+                  {textElements.length > 0 ? `Modifica i ${textElements.length} testo/i` : "Apri editor testo"}
                 </div>
-                <div style={{ color: "rgba(255,255,255,.3)", fontSize: 11, marginTop: 2 }}>Aggiungi e modifica i testi del post</div>
+                <div style={{ color: "rgba(255,255,255,.5)", fontSize: 11, marginTop: 2 }}>Tocca per aprire l'editor a tutto schermo</div>
               </div>
             </button>
           </div>
